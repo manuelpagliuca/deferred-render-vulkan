@@ -8,6 +8,7 @@
 #include <iostream>
 #include <set>
 #include <algorithm>
+#include <array>
 
 #include "Utilities.h"
 
@@ -48,6 +49,11 @@ private:
 	VkFormat m_swapChainImageFormat;				// Formato da utilizzare per l'Image View (prelevato dalla creazione della SwapChain)
 	VkExtent2D m_swapChainExtent;					// Extent da utilizzare per l'Image View (prelevato dalla creazione della SwapChain)
 
+	/* Pipeline */
+	VkPipeline m_graphicsPipeline;
+	VkPipelineLayout m_pipelineLayout;
+	VkRenderPass m_renderPass;
+
 private:
 	// Funzioni per la creazione
 	void createInstance();													// Creawebzione dell'istanza di Vulkan
@@ -61,6 +67,7 @@ private:
 	void createSurface();
 	void createSwapChain();
 	void createGraphicPipeline();
+	void createRenderPass();
 
 	// Funzioni di controllo
 	bool checkInstanceExtensionSupport(std::vector<const char*>* checkExtension); // Controlla se le estensioni (scaricaete) che si vogliono utilizzare sono supportate da Vulkan.
