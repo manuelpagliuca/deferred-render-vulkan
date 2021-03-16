@@ -36,23 +36,28 @@ private:
 	struct {
 		VkPhysicalDevice physicalDevice;
 		VkDevice logicalDevice;
-	} m_mainDevice;									// Dispositivo principale (logico-fisico)
+	} m_mainDevice;										// Dispositivo principale (logico-fisico)
 	 
-	QueueFamilyIndices m_queueFamilyIndices;		// Indici delle Queue Families
-	VkSurfaceKHR m_surface;							// Surface di Vulkan (interfaccia per la swapchain)
-	VkQueue	m_graphicsQueue;						// Puntatore alla Queue Grafica del device logico
-	VkQueue	m_presentationQueue;					// Puntatore alla Queue di Presentazione del device logico
-	VkSwapchainKHR m_swapchain;						// Puntatore alla SwapChain
-	std::vector<SwapChainImage> m_swapChainImages;	// Vettore contenente le Image e ImageView della SwapChain
+	QueueFamilyIndices m_queueFamilyIndices;			// Indici delle Queue Families
+	VkSurfaceKHR m_surface;								// Surface di Vulkan (interfaccia per la swapchain)
+	VkQueue	m_graphicsQueue;							// Puntatore alla Queue Grafica del device logico
+	VkQueue	m_presentationQueue;						// Puntatore alla Queue di Presentazione del device logico
+	VkSwapchainKHR m_swapchain;							// Puntatore alla SwapChain
+	std::vector<SwapChainImage>  m_swapChainImages;		  // Vettore contenente le Image e ImageView della SwapChain
+	std::vector<VkFramebuffer>   m_swapChainFrameBuffers; //
+	std::vector<VkCommandBuffer> m_commandBuffer;		  // 
 
 	/* Variabili ausiliarie */
-	VkFormat m_swapChainImageFormat;				// Formato da utilizzare per l'Image View (prelevato dalla creazione della SwapChain)
-	VkExtent2D m_swapChainExtent;					// Extent da utilizzare per l'Image View (prelevato dalla creazione della SwapChain)
-
+	VkFormat m_swapChainImageFormat;	// Formato da utilizzare per l'Image View (prelevato dalla creazione della SwapChain)
+	VkExtent2D m_swapChainExtent;		// Extent da utilizzare per l'Image View (prelevato dalla creazione della SwapChain)
+	
 	/* Pipeline */
 	VkPipeline m_graphicsPipeline;
 	VkPipelineLayout m_pipelineLayout;
 	VkRenderPass m_renderPass;
+
+	/* Pools */
+	VkCommandPool m_graphicsComandPool;
 
 private:
 	// Funzioni per la creazione
@@ -68,8 +73,15 @@ private:
 	void createSwapChain();
 	void createGraphicPipeline();
 	void createRenderPass();
+	void createFramebuffers();
+	void createCommandPool();
+	void createCommandBuffers();
 
-	// Funzioni di controllo
+
+	/* Funzioni di registrazione */
+	void recordCommands();
+
+	/* Funzioni di controllo */
 	bool checkInstanceExtensionSupport(std::vector<const char*>* checkExtension); // Controlla se le estensioni (scaricaete) che si vogliono utilizzare sono supportate da Vulkan.
 	bool checkDeviceSuitable(VkPhysicalDevice device);							  // Controllo se il dispositivo fisico è adatto allo scopo del programma (ha una QueueFamily di tipo Graphics)
 	bool checkValidationLayerSupport(std::vector<const char*>* validationLayers); // Controllo se le Validation Layer fornite sono supportate da Vulkan.
