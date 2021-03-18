@@ -20,6 +20,7 @@ int VulkanRenderer::init(void* t_window)
 		createSwapChain();
 		createRenderPass();
 		createGraphicPipeline();
+		createFramebuffers();
 		createCommandPool();
 		createCommandBuffers();
 		recordCommands();
@@ -761,8 +762,8 @@ void VulkanRenderer::DestroyDebugUtilsMessengerEXT(
 void VulkanRenderer::createGraphicPipeline()
 {
 	// Lettura dei codici intermedi SPIR-V
-	std::vector<char> vertexShaderCode	 = readFile("Shaders/vert.spv");
-	std::vector<char> fragmentShaderCode = readFile("Shaders/frag.spv");
+	std::vector<char> vertexShaderCode	 = readFile("./shaders/vert.spv");
+	std::vector<char> fragmentShaderCode = readFile("./shaders/frag.spv");
 
 	// Costruzione dei moduli shader
 	VkShaderModule vertexShaderModule	 = createShaderModule(vertexShaderCode);
@@ -926,7 +927,7 @@ void VulkanRenderer::createGraphicPipeline()
 	pipelineCreateInfo.basePipelineIndex	= -1;			  // Indice della pipeline da cui derivare (in caso in cui siano passate molteplici)
 
 	// Creazione della pipeline grafica
-	res = vkCreateGraphicsPipelines(m_mainDevice.logicalDevice, nullptr, VK_NULL_HANDLE, &pipelineCreateInfo, nullptr, &m_graphicsPipeline);
+	res = vkCreateGraphicsPipelines(m_mainDevice.logicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &m_graphicsPipeline);
 
 	if (res != VK_SUCCESS)
 	{
@@ -1076,7 +1077,7 @@ void VulkanRenderer::createCommandBuffers()
 	cbAllocInfo.sType			   = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO; //
 	cbAllocInfo.commandPool		   = m_graphicsComandPool;							  //
 	cbAllocInfo.level			   = VK_COMMAND_BUFFER_LEVEL_PRIMARY;				  // VK_COMMAND_BUFFER_LEVEL_PRIMARY : Buffer che viene inviato direttamente sulla queue. 
-																			  // VK_COMMAND_BUFFER_LEVEL_SECONDARY : Il buffer non può essere chiamato direttamente, ma  da altri buffers via "vkCmdExecureCommands".
+																					  // VK_COMMAND_BUFFER_LEVEL_SECONDARY : Il buffer non può essere chiamato direttamente, ma  da altri buffers via "vkCmdExecureCommands".
 	cbAllocInfo.commandBufferCount = static_cast<uint32_t>(m_commandBuffer.size()); // Quantità di commandbuffers che verranno creati (non si usa un for)
 
 	// Salva tutti i command buffers dentro 'm_commandBuffer'
