@@ -24,6 +24,7 @@ int VulkanRenderer::init(void* t_window)
 		createCommandPool();
 		createCommandBuffers();
 		recordCommands();
+		createSynchronisation();
 	}
 	catch (std::runtime_error& e)
 	{
@@ -34,6 +35,62 @@ int VulkanRenderer::init(void* t_window)
 	return 0;
 }
 
+// Si occupa di disegnare le immagini a schermo
+// 2 semafori per avvisare quando l'immagine è pronta e d uno per avvisare quanto l'immagine è pronta per essere presentata a schermo
+void VulkanRenderer::draw()
+{
+	// 1. Prende la prossima immagine disposnibile e imposta un segnale che avvisa quando l'immagine ha terminato (semaphore)
+
+	// Preleva l'index della prossima immagine da mostrare, quando pronta manda un segnale al semaforo
+	uint32_t imageIndex;
+	vkAcquireNextImageKHR(m_mainDevice.logicalDevice, m_swapchain, std::numeric_limits<uint64_t>::max(), m_imageAvailable, VK_NULL_HANDLE, &imageIndex);
+
+
+	// -- Invia il command buffer al render -- 
+	// Informazioni per l'invio alla queue
+	// Il renderer non disegna finchè image available non è impostata a true
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.waitSemaphoreCount = 1;					// Numero dei semafori da aspettare
+	submitInfo.pWaitSemaphores = &m_imageAvailable;		// Lista dei semafori da aspettare
+
+	VkPipelineStageFlags waitStages[] = {
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT	// Stages dove controllare il semaforo
+	};
+		
+	submitInfo.pWaitDstStageMask	= waitStages;
+	submitInfo.commandBufferCount	= 1;						    // Numero di command buffer da inviare
+	submitInfo.pCommandBuffers		= &m_commandBuffer[imageIndex]; // Command buffer to submit
+	submitInfo.signalSemaphoreCount = 1;							// Numero di semafori a cui segnalare
+	submitInfo.pSignalSemaphores	= &m_renderFinished;		    // Semaforo a cui viene inviato il segnale quando il render è terminato
+
+	// Invia il command buffer alla queue
+	VkResult result = vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+	
+	if (result != VK_SUCCESS)
+	{
+		std::runtime_error("Failed to submit command buffer to queue!");
+	}
+
+	// -- PRESENTA L'IMMAGINE RENDERIZZATA A SCHERMO --
+	VkPresentInfoKHR presentInfo   = { };
+	presentInfo.sType			   = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.waitSemaphoreCount = 1;					// Numero di semafori da aspettare prima di renderizzare
+	presentInfo.pWaitSemaphores	   = &m_renderFinished; // Semaforo relativo al termine del rendering
+	presentInfo.swapchainCount	   = 1;					// Numero di swapchains a cui presentare
+	presentInfo.pSwapchains		   = &m_swapchain;	 	// Swapchain contenente le immagini
+	presentInfo.pImageIndices	   = &imageIndex;		// Indice dell'immagine nella swapchain da visualizzare
+
+	// Presentazione dell'immagine
+	result = vkQueuePresentKHR(m_presentationQueue, &presentInfo);
+
+	if (result != VK_SUCCESS)
+	{
+		std::runtime_error("Failed to present the image!");
+	}
+
+}
+
 void VulkanRenderer::createInstance()
 {
 	// APPLICATION INFO (per la creazione di un istanza di Vulkan si necessitano le informazioni a riguardo dell'applicazione)
@@ -42,7 +99,7 @@ void VulkanRenderer::createInstance()
 	appInfo.sType				= VK_STRUCTURE_TYPE_APPLICATION_INFO; // Tipo di struttura
 	appInfo.pApplicationName	= "Vulkan Render Application";		  // Nome dell'applicazione
 	appInfo.applicationVersion  = VK_MAKE_VERSION(1, 0, 0);			  // Versione personalizzata dell'applicazione
-	appInfo.pEngineName			= "GREEN_ENGINE";					  // Nome dell'engine
+	appInfo.pEngineName			= "2148_RENDERER";					  // Nome dell'engine
 	appInfo.engineVersion		= VK_MAKE_VERSION(1, 0, 0);			  // Versione personalizzata dell'engine
 	appInfo.apiVersion			= VK_API_VERSION_1_0;				  // Versione di Vulkan che si vuole utilizzare (unico obbligatorio)
 
@@ -1089,6 +1146,19 @@ void VulkanRenderer::createCommandBuffers()
 	}
 }
 
+void VulkanRenderer::createSynchronisation()
+{
+	// Semaphore creation information
+	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
+	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+		
+	if (vkCreateSemaphore(m_mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &m_imageAvailable) != VK_SUCCESS || 
+		vkCreateSemaphore(m_mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &m_renderFinished) != VK_SUCCESS)
+	{
+		std::runtime_error("Failed to create semaphores!");
+	}
+}
+
 // Resituisce lo shader module dato uno specifico SPIR-V
 VkShaderModule VulkanRenderer::createShaderModule(const std::vector<char>& code)
 {
@@ -1120,6 +1190,10 @@ VulkanRenderer::~VulkanRenderer()
 // Pulisce il Vulkan Renderer
 void VulkanRenderer::cleanup()
 {
+	// Distrugge i semafori
+	vkDestroySemaphore(m_mainDevice.logicalDevice, m_renderFinished, nullptr);
+	vkDestroySemaphore(m_mainDevice.logicalDevice, m_imageAvailable, nullptr);
+
 	// Distrugge la commandpool
 	vkDestroyCommandPool(m_mainDevice.logicalDevice, m_graphicsComandPool, nullptr);
 

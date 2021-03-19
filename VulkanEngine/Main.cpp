@@ -40,6 +40,9 @@ int main()
 	while (!glfwWindowShouldClose(window))	// Loop finchè non si chiude la finestras
 	{
 		glfwPollEvents();
+
+		vulkanRenderer->draw();
+
 	}
 
 	glfwDestroyWindow(window);				// Distruzione della finestra GLFW

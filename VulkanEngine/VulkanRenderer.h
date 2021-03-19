@@ -25,6 +25,7 @@ public:
 	~VulkanRenderer();
 
 	int init(void* newWindow);
+	void draw();
 	void cleanup();
 
 private:
@@ -59,6 +60,10 @@ private:
 	/* Pools */
 	VkCommandPool m_graphicsComandPool;
 
+	/* Semafori */
+	VkSemaphore m_imageAvailable; // Avvisa quanto l'immagine è disponibile
+	VkSemaphore m_renderFinished; // Avvisa quando il rendering è terminato
+
 private:
 	// Funzioni per la creazione
 	void createInstance();													// Creawebzione dell'istanza di Vulkan
@@ -76,7 +81,7 @@ private:
 	void createFramebuffers();
 	void createCommandPool();
 	void createCommandBuffers();
-
+	void createSynchronisation();
 
 	/* Funzioni di registrazione */
 	void recordCommands();
