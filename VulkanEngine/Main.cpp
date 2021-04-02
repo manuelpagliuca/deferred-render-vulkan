@@ -42,7 +42,6 @@ int main()
 		glfwPollEvents();
 
 		vulkanRenderer->draw();
-
 	}
 
 	glfwDestroyWindow(window);				// Distruzione della finestra GLFW

@@ -17,11 +17,38 @@ int VulkanRenderer::init(void* t_window)
 		createSurface();
 		getPhysicalDevice();
 		createLogicalDevice();
+
 		createSwapChain();
 		createRenderPass();
 		createGraphicPipeline();
 		createFramebuffers();
 		createCommandPool();
+
+		// Creazione della mesh
+		std::vector<Vertex> meshVertices = {
+			{ { -0.1, -0.4, 0.0 },{ 1.0f, 0.0f, 0.0f } },	// 0
+			{ { -0.1, 0.4, 0.0 },{ 0.0f, 1.0f, 0.0f } },	// 1
+			{ { -0.9, 0.4, 0.0 },{ 0.0f, 0.0f, 1.0f } },    // 2
+			{ { -0.9, -0.4, 0.0 },{ 1.0f, 1.0f, 0.0f } },   // 3
+		};
+
+		std::vector<Vertex> meshVertices2 = {
+			{ { 0.9, -0.3, 0.0 },{ 1.0f, 0.0f, 0.0f } },	// 0
+			{ { 0.9, 0.1, 0.0 },{ 0.0f, 1.0f, 0.0f } },	    // 1
+			{ { 0.1, 0.3, 0.0 },{ 0.0f, 0.0f, 1.0f } },     // 2
+			{ { 0.1, -0.3, 0.0 },{ 1.0f, 1.0f, 0.0f } },    // 3
+		};
+
+		// Index Data
+		std::vector<uint32_t> meshIndices = {
+			0, 1, 2,
+			2, 3, 0
+		};
+		
+		firstMesh = Mesh(m_mainDevice.physicalDevice, m_mainDevice.logicalDevice, 
+						 m_graphicsQueue, m_graphicsComandPool, 
+						 &meshVertices);
+
 		createCommandBuffers();
 		recordCommands();
 		createSynchronisation();
@@ -39,33 +66,38 @@ int VulkanRenderer::init(void* t_window)
 // 2 semafori per avvisare quando l'immagine è pronta e d uno per avvisare quanto l'immagine è pronta per essere presentata a schermo
 void VulkanRenderer::draw()
 {
+	// Aspettare per il dato Fence il segnale dell'ultimo draw effettauto prima di continuare
+	vkWaitForFences(m_mainDevice.logicalDevice, 1, &m_drawFences[m_currentFrame], VK_TRUE, std::numeric_limits<uint64_t>::max());
+
+	// Manualmente resetta le fences
+	vkResetFences(m_mainDevice.logicalDevice, 1, &m_drawFences[m_currentFrame]);
+		
 	// 1. Prende la prossima immagine disposnibile e imposta un segnale che avvisa quando l'immagine ha terminato (semaphore)
 
 	// Preleva l'index della prossima immagine da mostrare, quando pronta manda un segnale al semaforo
 	uint32_t imageIndex;
-	vkAcquireNextImageKHR(m_mainDevice.logicalDevice, m_swapchain, std::numeric_limits<uint64_t>::max(), m_imageAvailable, VK_NULL_HANDLE, &imageIndex);
-
+	vkAcquireNextImageKHR(m_mainDevice.logicalDevice, m_swapchain, std::numeric_limits<uint64_t>::max(), m_imageAvailable[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
 
 	// -- Invia il command buffer al render -- 
 	// Informazioni per l'invio alla queue
 	// Il renderer non disegna finchè image available non è impostata a true
 	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.waitSemaphoreCount = 1;					// Numero dei semafori da aspettare
-	submitInfo.pWaitSemaphores = &m_imageAvailable;		// Lista dei semafori da aspettare
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;				// Tipo di struttura
+	submitInfo.waitSemaphoreCount = 1;								// Numero dei semafori da aspettare
+	submitInfo.pWaitSemaphores = &m_imageAvailable[m_currentFrame];	// Lista dei semafori da aspettare
 
 	VkPipelineStageFlags waitStages[] = {
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT	// Stages dove controllare il semaforo
 	};
 		
 	submitInfo.pWaitDstStageMask	= waitStages;
-	submitInfo.commandBufferCount	= 1;						    // Numero di command buffer da inviare
-	submitInfo.pCommandBuffers		= &m_commandBuffer[imageIndex]; // Command buffer to submit
-	submitInfo.signalSemaphoreCount = 1;							// Numero di semafori a cui segnalare
-	submitInfo.pSignalSemaphores	= &m_renderFinished;		    // Semaforo a cui viene inviato il segnale quando il render è terminato
+	submitInfo.commandBufferCount	= 1;								 // Numero di command buffer da inviare
+	submitInfo.pCommandBuffers		= &m_commandBuffer[imageIndex];		 // Command buffer to submit
+	submitInfo.signalSemaphoreCount = 1;								 // Numero di semafori a cui segnalare
+	submitInfo.pSignalSemaphores	= &m_renderFinished[m_currentFrame]; // Semaforo a cui viene inviato il segnale quando il render è terminato
 
-	// Invia il command buffer alla queue
-	VkResult result = vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+	// Invia il command buffer alla queue, quando finisce di disegnare manda un segnale al relativo Fence del frame
+	VkResult result = vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_drawFences[m_currentFrame]);
 	
 	if (result != VK_SUCCESS)
 	{
@@ -74,12 +106,12 @@ void VulkanRenderer::draw()
 
 	// -- PRESENTA L'IMMAGINE RENDERIZZATA A SCHERMO --
 	VkPresentInfoKHR presentInfo   = { };
-	presentInfo.sType			   = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.waitSemaphoreCount = 1;					// Numero di semafori da aspettare prima di renderizzare
-	presentInfo.pWaitSemaphores	   = &m_renderFinished; // Semaforo relativo al termine del rendering
-	presentInfo.swapchainCount	   = 1;					// Numero di swapchains a cui presentare
-	presentInfo.pSwapchains		   = &m_swapchain;	 	// Swapchain contenente le immagini
-	presentInfo.pImageIndices	   = &imageIndex;		// Indice dell'immagine nella swapchain da visualizzare
+	presentInfo.sType			   = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;// Tipo di struttura
+	presentInfo.waitSemaphoreCount = 1;									// Numero di semafori da aspettare prima di renderizzare
+	presentInfo.pWaitSemaphores	   = &m_renderFinished[m_currentFrame]; // Semaforo relativo al termine del rendering
+	presentInfo.swapchainCount	   = 1;									// Numero di swapchains a cui presentare
+	presentInfo.pSwapchains		   = &m_swapchain;	 					// Swapchain contenente le immagini
+	presentInfo.pImageIndices	   = &imageIndex;						// Indice dell'immagine nella swapchain da visualizzare
 
 	// Presentazione dell'immagine
 	result = vkQueuePresentKHR(m_presentationQueue, &presentInfo);
@@ -89,6 +121,8 @@ void VulkanRenderer::draw()
 		std::runtime_error("Failed to present the image!");
 	}
 
+	// Prende il prossimo frame
+	m_currentFrame = (m_currentFrame + 1) % MAX_FRAME_DRAWS;
 }
 
 void VulkanRenderer::createInstance()
@@ -154,7 +188,6 @@ void VulkanRenderer::recordCommands()
 	// Informazioni sul come iniziare ogni command buffer
 	VkCommandBufferBeginInfo bufferBeginInfo = {};
 	bufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;  //
-	bufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT; //
 	
 	// Informazioni sul come iniziare il Render Pass (necessario solo per le applicazioni grafiche)
 	VkRenderPassBeginInfo renderPassBeginInfo = {};
@@ -190,7 +223,11 @@ void VulkanRenderer::recordCommands()
 				// È possibile impostare molteplici pipeline e switchare(per esempio una versione DEFERREd o WIREFRAME)
 				vkCmdBindPipeline(m_commandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 				
-				vkCmdDraw(m_commandBuffer[i], 3, 1, 0, 0);
+				VkBuffer vertexBuffers[] = { firstMesh.getVertexBuffer() };		// Buffer da bindare prima di essere disegnati
+				VkDeviceSize offsets[] = { 0 };
+				vkCmdBindVertexBuffers(m_commandBuffer[i], 0, 1, vertexBuffers, offsets);
+
+				vkCmdDraw(m_commandBuffer[i],static_cast<uint32_t>(firstMesh.getVertexCount()), 1, 0, 0);
 
 			// Fine del Render Pass
 			vkCmdEndRenderPass(m_commandBuffer[i]);
@@ -766,13 +803,13 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanRenderer::debugCallback(
 	switch (messageType)
 	{
 	case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
-		std::cerr << "[General]";
+		std::cerr << "-[General]";
 		break;
 	case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
-		std::cerr << "[Violation]";
+		std::cerr << "-[Violation]";
 		break;
 	case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
-		std::cerr << "[Non-Optimal]";
+		std::cerr << "-[Non-Optimal]";
 		break;
 	}*/
 
@@ -847,13 +884,37 @@ void VulkanRenderer::createGraphicPipeline()
 
 	// -- PIPELINE --
 
-	// #1 STAGE - VERTEX INPUT (TODO: Inserire descrizioni dei vertici quando le risorse sono create)
+	// Descrizione dei dati per un singolo vertice (posizione, colori, tex-coords, normals, ...)
+	VkVertexInputBindingDescription bindingDescription = {}; // Non è una createInfo quindi non ha un sType
+	bindingDescription.binding   = 0;							// Può bindarsi a molteplici streams di dati
+	bindingDescription.stride    = sizeof(Vertex);				// Dimensione di un singolo vertice
+	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; // Come muoversi tra i dati dopo ogni vertice
+																// VK_VERTEX_INPUT_RATE_VERTEX : Si sposta al prossimo vertice
+																// VK_VERTEX_INPUT_RATE_INSTANCE : Si sposta al prossimo vertice per la prossima istanza
+																
+	// Come i dati per un attributo sono definiti in un vertice
+	std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions;
+	
+	// Attributo per la posizione
+	attributeDescriptions[0].binding  = 0;						    // Su quale binding di dati si trova (deve essere lo stesso di sopra)
+	attributeDescriptions[0].location = 0;						    // Location di binding nel Vertex Shader
+	attributeDescriptions[0].format	  = VK_FORMAT_R32G32B32_SFLOAT; // Formato assunto dei dati + la dimensione
+	attributeDescriptions[0].offset	  = offsetof(Vertex, pos);		// Dove l'attributo è definito nei dati per un singolo vertice
+
+	// Attributo per il colore
+	attributeDescriptions[1].binding = 0;						  
+	attributeDescriptions[1].location = 1;						  
+	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT; 
+	attributeDescriptions[1].offset = offsetof(Vertex, col);		
+
+
+	// #1 STAGE - VERTEX INPUT
 	VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
 	vertexInputCreateInfo.sType								= VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputCreateInfo.vertexBindingDescriptionCount		= 0;	// 
-	vertexInputCreateInfo.pVertexBindingDescriptions		= nullptr; // Lista delle descrizioni di binding dei vertici (stride/spacing infos)
-	vertexInputCreateInfo.vertexAttributeDescriptionCount	= 0;
-	vertexInputCreateInfo.pVertexAttributeDescriptions		= nullptr; // Lista delle descrizione degli attributi dei vertici (formato dati, dove bindare nello shader ..)
+	vertexInputCreateInfo.vertexBindingDescriptionCount		= 1;	// 
+	vertexInputCreateInfo.pVertexBindingDescriptions		= &bindingDescription; // Lista delle descrizioni di binding dei vertici (stride/spacing infos)
+	vertexInputCreateInfo.vertexAttributeDescriptionCount	= static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputCreateInfo.pVertexAttributeDescriptions		= attributeDescriptions.data(); // Lista delle descrizione degli attributi dei vertici (formato dati, dove bindare nello shader ..)
 
 	// #2 Stage - INPUT ASSEMBLY
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo = {};
@@ -1011,8 +1072,8 @@ void VulkanRenderer::createRenderPass()
 	// FrameBuffer data vengono salvate come immagini, ma alle immagini è possibile utilizzare differenti layout dei dati
 	// questo per motivi di ottimizzazione nell'uso di alcune operazioni
 	// È presente un layout intermedio che verrà svolto dai subpasses
-	colourAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;		  // Layout dell'immagini prima del render pass
-	colourAttachment.finalLayout   = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // Layout delle immagini dopo il render pass (nel quale viene cambiato)
+	colourAttachment.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;		// Layout dell'immagini prima del render pass
+	colourAttachment.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;  // Layout delle immagini dopo il render pass (nel quale viene cambiato)
 
 	// SubPass
 	// Per passare gli attachment si utilizzano degli attachment reference che sono degli indici presenti
@@ -1148,14 +1209,28 @@ void VulkanRenderer::createCommandBuffers()
 
 void VulkanRenderer::createSynchronisation()
 {
+	m_imageAvailable.resize(MAX_FRAME_DRAWS);
+	m_renderFinished.resize(MAX_FRAME_DRAWS);
+	m_drawFences.resize(MAX_FRAME_DRAWS);
+
 	// Semaphore creation information
 	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
 	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-		
-	if (vkCreateSemaphore(m_mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &m_imageAvailable) != VK_SUCCESS || 
-		vkCreateSemaphore(m_mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &m_renderFinished) != VK_SUCCESS)
+
+	// Creazione della fence
+	VkFenceCreateInfo fenceCreateInfo = {};
+	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+
+	for (size_t i = 0; i < MAX_FRAME_DRAWS; ++i)
 	{
-		std::runtime_error("Failed to create semaphores!");
+		if (vkCreateSemaphore(m_mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &m_imageAvailable[i]) != VK_SUCCESS || 
+			vkCreateSemaphore(m_mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &m_renderFinished[i]) != VK_SUCCESS ||
+			vkCreateFence(m_mainDevice.logicalDevice, &fenceCreateInfo, nullptr, &m_drawFences[i]) != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to create semaphores and/or Fence!");
+		}
 	}
 }
 
@@ -1190,9 +1265,18 @@ VulkanRenderer::~VulkanRenderer()
 // Pulisce il Vulkan Renderer
 void VulkanRenderer::cleanup()
 {
+	// Aspetta finchè nessun azione sia eseguita sul device semza distruggere niente
+	vkDeviceWaitIdle(m_mainDevice.logicalDevice);
+
+	firstMesh.destroyVertexBuffer();
+
 	// Distrugge i semafori
-	vkDestroySemaphore(m_mainDevice.logicalDevice, m_renderFinished, nullptr);
-	vkDestroySemaphore(m_mainDevice.logicalDevice, m_imageAvailable, nullptr);
+	for (size_t i = 0; i < MAX_FRAME_DRAWS; ++i)
+	{
+		vkDestroySemaphore(m_mainDevice.logicalDevice, m_renderFinished[i], nullptr);
+		vkDestroySemaphore(m_mainDevice.logicalDevice, m_imageAvailable[i], nullptr);
+		vkDestroyFence(m_mainDevice.logicalDevice, m_drawFences[i], nullptr);
+	}
 
 	// Distrugge la commandpool
 	vkDestroyCommandPool(m_mainDevice.logicalDevice, m_graphicsComandPool, nullptr);

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 
+#include "Mesh.h"
 #include "Utilities.h"
 
 #ifdef NDEBUG										// Abilita le Validation Layers in caso di Debug
@@ -30,6 +31,8 @@ public:
 
 private:
 	GLFWwindow* m_window = nullptr;				// Finestra GLFW
+	int m_currentFrame   = 0;
+
 	/* Componenti Vulkan */
 	VkInstance m_instance;						// Instanza di Vulkan
 	VkDebugUtilsMessengerEXT m_debugMessenger;  // Debug Messanger (creato solo se le Validation Layers sono abilitate)
@@ -61,10 +64,13 @@ private:
 	VkCommandPool m_graphicsComandPool;
 
 	/* Semafori */
-	VkSemaphore m_imageAvailable; // Avvisa quanto l'immagine è disponibile
-	VkSemaphore m_renderFinished; // Avvisa quando il rendering è terminato
-
+	std::vector<VkSemaphore> m_imageAvailable; // Avvisa quanto l'immagine è disponibile
+	std::vector<VkSemaphore> m_renderFinished; // Avvisa quando il rendering è terminato
+	std::vector<VkFence> m_drawFences;
 private:
+	// Scene Objects
+	Mesh firstMesh;
+	
 	// Funzioni per la creazione
 	void createInstance();													// Creawebzione dell'istanza di Vulkan
 	void loadGlfwExtensions(std::vector<const char*>& instanceExtensions);	// Carica le estensioni di GLFW sul vettore (non controlla se sono supportate)
