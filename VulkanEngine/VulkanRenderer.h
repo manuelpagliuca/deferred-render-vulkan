@@ -3,6 +3,9 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <stdexcept>
 #include <vector>
 #include <iostream>
@@ -26,6 +29,9 @@ public:
 	~VulkanRenderer();
 
 	int init(void* newWindow);
+
+	void updateModel(glm::mat4 newModel);
+
 	void draw();
 	void cleanup();
 
@@ -68,10 +74,24 @@ private:
 	std::vector<VkSemaphore> m_renderFinished; // Avvisa quando il rendering è terminato
 	std::vector<VkFence> m_drawFences;
 
+	/* Descriptors */
+	VkDescriptorSetLayout m_descriptorSetLayout;	   // Come vengono formattati i dati prima di essere passati a gli shaders
+	VkDescriptorPool m_descriptorPool;
+	std::vector<VkDescriptorSet> m_descriptorSets;
+	std::vector<VkBuffer> m_uniformBuffer;			   // 
+	std::vector<VkDeviceMemory> m_uniformBufferMemory; // Contiene effettivamente l'uniform data per il descriptor set
+
 private:
 	// Scene Objects
 	std::vector<Mesh> m_meshList;
 	
+	// Scene Settings
+	struct MVP {
+		glm::mat4 projection;
+		glm::mat4 view;
+		glm::mat4 model;
+	} m_mvp;
+
 	// Funzioni per la creazione
 	void createInstance();													// Creawebzione dell'istanza di Vulkan
 	void loadGlfwExtensions(std::vector<const char*>& instanceExtensions);	// Carica le estensioni di GLFW sul vettore (non controlla se sono supportate)
@@ -89,7 +109,13 @@ private:
 	void createCommandPool();
 	void createCommandBuffers();
 	void createSynchronisation();
+	void createDescriptorSetLayout();
 
+	void createUniformBuffers();
+	void createDescriptorPool();
+	void createDescriptorSets();
+
+	void updateUniformFunctions(uint32_t imageIndex);
 	/* Funzioni di registrazione */
 	void recordCommands();
 

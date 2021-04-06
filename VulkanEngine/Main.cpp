@@ -8,7 +8,7 @@
 
 #include "VulkanRenderer.h"
 
-VulkanRenderer *vulkanRenderer = new VulkanRenderer();
+VulkanRenderer* vulkanRenderer = new VulkanRenderer();
 GLFWwindow* window			   = nullptr;
 
 // Creazione della finestra GLFW
@@ -37,9 +37,25 @@ int main()
 		return EXIT_FAILURE;
 	}
 
+	float angle		= 0.f;
+	float deltaTime = 0.f;
+	float lastTime  = 0.f;
+
 	while (!glfwWindowShouldClose(window))	// Loop finchè non si chiude la finestras
 	{
 		glfwPollEvents();
+
+		float const now = glfwGetTime();
+		deltaTime = now - lastTime;
+		lastTime  = now;
+		angle += 10.f * deltaTime;
+
+		if (angle > 360.f)
+		{
+			angle -= 360.f;
+		}
+
+		vulkanRenderer->updateModel(glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0.f, 0.f, 1.0f)));
 
 		vulkanRenderer->draw();
 	}
