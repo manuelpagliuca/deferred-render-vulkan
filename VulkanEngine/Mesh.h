@@ -21,7 +21,10 @@ public:
 
 	int		 getVertexCount();
 	VkBuffer getVertexBuffer();
-	void	 destroyVertexBuffer();
+	void	 destroyBuffers();
+
+	int		 getIndexCount() const;
+	VkBuffer getIndexBuffer() const;
 
 private:
 	int				 m_vertexCount;

@@ -67,9 +67,10 @@ private:
 	std::vector<VkSemaphore> m_imageAvailable; // Avvisa quanto l'immagine è disponibile
 	std::vector<VkSemaphore> m_renderFinished; // Avvisa quando il rendering è terminato
 	std::vector<VkFence> m_drawFences;
+
 private:
 	// Scene Objects
-	Mesh firstMesh;
+	std::vector<Mesh> m_meshList;
 	
 	// Funzioni per la creazione
 	void createInstance();													// Creawebzione dell'istanza di Vulkan

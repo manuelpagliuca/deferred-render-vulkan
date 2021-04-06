@@ -3,8 +3,11 @@
 Mesh::Mesh()
 {
 	m_vertexCount		 = 0;
+	m_indexCount		 = 0;
 	m_vertexBuffer		 = 0;
 	m_vertexBufferMemory = 0;
+	m_indexBuffer		 = 0;
+	m_indexBufferMemory  = 0;
 	m_physicalDevice	 = 0;
 	m_logicalDevice		 = 0;
 }
@@ -17,6 +20,7 @@ Mesh::Mesh(VkPhysicalDevice newPhysicalDevice,
 		   std::vector<uint32_t>* indices)
 {
 	m_vertexCount    = vertices->size();
+	m_indexCount	 = indices->size();
 	m_physicalDevice = newPhysicalDevice;
 	m_logicalDevice  = newLogicalDevice;
 	createVertexBuffer(transferQueue, transferCommandPool, vertices);
@@ -37,13 +41,23 @@ VkBuffer Mesh::getVertexBuffer()
 	return m_vertexBuffer;
 }
 
-void Mesh::destroyVertexBuffer()
+void Mesh::destroyBuffers()
 {
 	vkDestroyBuffer(m_logicalDevice, m_vertexBuffer, nullptr);
 	vkFreeMemory(m_logicalDevice, m_vertexBufferMemory, nullptr);
 
 	vkDestroyBuffer(m_logicalDevice, m_indexBuffer, nullptr);
 	vkFreeMemory(m_logicalDevice, m_indexBufferMemory, nullptr);
+}
+
+int Mesh::getIndexCount() const
+{
+	return m_indexCount;
+}
+
+VkBuffer Mesh::getIndexBuffer() const
+{
+	return m_indexBuffer;
 }
 
 void Mesh::createVertexBuffer(VkQueue transferQueue, VkCommandPool transferCommandPool, std::vector<Vertex>* vertices)
