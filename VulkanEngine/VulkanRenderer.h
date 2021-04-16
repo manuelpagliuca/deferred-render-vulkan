@@ -25,7 +25,7 @@
 class VulkanRenderer
 {
 public:
-	VulkanRenderer() = default;
+	VulkanRenderer();
 	~VulkanRenderer();
 
 	int init(void* newWindow);
@@ -35,13 +35,22 @@ public:
 	void draw();
 	void cleanup();
 
+
 private:
-	GLFWwindow* m_window = nullptr;				// Finestra GLFW
-	int m_currentFrame   = 0;
+	const std::vector<const char*> m_requestedDeviceExtensions =
+	{
+		// SwapChain
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME
+	};
+
+private:
+	GLFWwindow* m_window = nullptr;	// Finestra GLFW
+	int m_currentFrame   = 0;	    // Frame corrente
 
 	/* Componenti Vulkan */
-	VkInstance m_instance;						// Instanza di Vulkan
-	VkDebugUtilsMessengerEXT m_debugMessenger;  // Debug Messanger (creato solo se le Validation Layers sono abilitate)
+	
+	VkInstance m_instance;
+	VkDebugUtilsMessengerEXT m_debugMessenger;
 
 	struct {
 		VkPhysicalDevice physicalDevice;
@@ -70,9 +79,14 @@ private:
 	VkCommandPool m_graphicsComandPool;
 
 	/* Semafori */
-	std::vector<VkSemaphore> m_imageAvailable; // Avvisa quanto l'immagine è disponibile
-	std::vector<VkSemaphore> m_renderFinished; // Avvisa quando il rendering è terminato
-	std::vector<VkFence> m_drawFences;
+
+	struct SubmissionSyncObjects {
+		VkSemaphore m_imageAvailable; // Avvisa quanto l'immagine è disponibile
+		VkSemaphore m_renderFinished; // Avvisa quando il rendering è terminato
+		VkFence m_inFlight;	  // 
+	};
+
+	std::vector<SubmissionSyncObjects> m_syncObjects;
 
 	/* Descriptors */
 	VkDescriptorSetLayout m_descriptorSetLayout;	   // Come vengono formattati i dati prima di essere passati a gli shaders
@@ -95,7 +109,7 @@ private:
 	// Funzioni per la creazione
 	void createInstance();													// Creawebzione dell'istanza di Vulkan
 	void loadGlfwExtensions(std::vector<const char*>& instanceExtensions);	// Carica le estensioni di GLFW sul vettore (non controlla se sono supportate)
-	void setQueueFamiliesIndices(VkPhysicalDevice device);					// Imposta l'indice delle Queue Families presenti sul Physical Device
+	void getQueueFamiliesIndices(VkPhysicalDevice device);					// Imposta l'indice delle Queue Families presenti sul Physical Device
 	SwapChainDetails getSwapChainDetails(VkPhysicalDevice device);
 
 	// Funzioni per l'inizializzazione del Vulkan Renderer

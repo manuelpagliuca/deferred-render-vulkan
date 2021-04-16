@@ -1,5 +1,29 @@
 #include "VulkanRenderer.h"
 
+VulkanRenderer::VulkanRenderer()
+{
+	m_debugMessenger = 0;
+	m_descriptorPool = 0;
+	m_descriptorSetLayout = 0;
+	m_surface = 0;
+	m_renderPass = 0;
+	m_swapchain = 0;
+	m_pipelineLayout = 0;
+	m_instance = 0;
+	m_graphicsPipeline = 0;
+	m_graphicsComandPool = 0;
+	m_graphicsQueue = 0;
+	m_mainDevice.logicalDevice = 0;
+	m_mainDevice.physicalDevice = 0;
+	m_swapChainImageFormat = VK_FORMAT_UNDEFINED;
+	m_presentationQueue = 0;
+	m_swapChainExtent.height = 0;
+	m_swapChainExtent.width = 0;
+	m_mvp.model = glm::mat4(1.f);
+	m_mvp.projection = glm::mat4(1.f);
+	m_mvp.view = glm::mat4(1.f);
+}
+
 int VulkanRenderer::init(void* t_window)
 {
 	if (!t_window)
@@ -25,7 +49,6 @@ int VulkanRenderer::init(void* t_window)
 		createCommandPool();
 
 		// Creazione delle matrici che verranno caricate sui Descriptor Sets
-
 		m_mvp.projection = glm::perspective(glm::radians(45.0f),
 											static_cast<float>(m_swapChainExtent.width) / static_cast<float>(m_swapChainExtent.height),
 											0.1f, 100.f);
@@ -57,7 +80,6 @@ int VulkanRenderer::init(void* t_window)
 			0, 1, 2,
 			2, 3, 0
 		};
-		
 
 		m_meshList.push_back(Mesh(
 			m_mainDevice.physicalDevice, m_mainDevice.logicalDevice,
@@ -90,82 +112,108 @@ void VulkanRenderer::updateModel(glm::mat4 newModel)
 	m_mvp.model = newModel;
 }
 
-// Si occupa di disegnare le immagini a schermo
-// 2 semafori per avvisare quando l'immagine è pronta e d uno per avvisare quanto l'immagine è pronta per essere presentata a schermo
+// Effettua l'operazioni di drawing nonchè di prelevamento dell'immagine.
+// 1. Prelevala prossima immagine disponibile da disegnare e segnala il semaforo relativo quando abbiamo terminato
+// 2. Invia il CommandBuffer alla Queue di esecuzione, assicurandosi che l'immagine da mettere SIGNALED sia disponibile
+//    prima dell'operazione di drawing
+// 3. Presenta l'immagine a schermo, dopo che il render è pronto.
+
 void VulkanRenderer::draw()
 {
+	// Aspetta 1 Fence di essere nello stato di SIGNALED 
+	// Aspettare per il dato Fence il segnale dell'ultimo draw effettuato prima di continuare
+	vkWaitForFences(m_mainDevice.logicalDevice, 1, &m_syncObjects[m_currentFrame].m_inFlight, VK_TRUE, UINT64_MAX);
+
+	// Metto la Fence ad UNSIGNALED (la GPU deve aspettare per la prossima operazione di draw)
+	vkResetFences(m_mainDevice.logicalDevice, 1, &m_syncObjects[m_currentFrame].m_inFlight);
+		
+	// Recupero l'index della prossima immagine disponibile della SwapChain,
+	// e mette SIGNALED il relativo semaforo 'm_imageAvailable' per avvisare
+	// che l'immagine è pronta ad essere utilizzata.
 	uint32_t imageIndex;
-	vkAcquireNextImageKHR(m_mainDevice.logicalDevice, m_swapchain, std::numeric_limits<uint64_t>::max(),
-		m_imageAvailable[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
+	vkAcquireNextImageKHR(m_mainDevice.logicalDevice, m_swapchain,
+						  std::numeric_limits<uint64_t>::max(),
+					      m_syncObjects[m_currentFrame].m_imageAvailable, VK_NULL_HANDLE, &imageIndex);
 
-	// Aspettare per il dato Fence il segnale dell'ultimo draw effettauto prima di continuare
-	vkWaitForFences(m_mainDevice.logicalDevice, 1, &m_drawFences[m_currentFrame], VK_TRUE, std::numeric_limits<uint64_t>::max());
-
-	// Manualmente resetta le fences
-	vkResetFences(m_mainDevice.logicalDevice, 1, &m_drawFences[m_currentFrame]);
-		
+	// Copia nell'UniformBuffer della GPU le matrici MVP
 	updateUniformFunctions(imageIndex);
-	// 1. Prende la prossima immagine disposnibile e imposta un segnale che avvisa quando l'immagine ha terminato (semaphore)
 
-	// Preleva l'index della prossima immagine da mostrare, quando pronta manda un segnale al semaforo
-	vkAcquireNextImageKHR(m_mainDevice.logicalDevice, m_swapchain, std::numeric_limits<uint64_t>::max(), m_imageAvailable[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
-
-	// -- Invia il command buffer al render -- 
-	// Informazioni per l'invio alla queue
-	// Il renderer non disegna finchè image available non è impostata a true
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;				// Tipo di struttura
-	submitInfo.waitSemaphoreCount = 1;								// Numero dei semafori da aspettare
-	submitInfo.pWaitSemaphores = &m_imageAvailable[m_currentFrame];	// Lista dei semafori da aspettare
-
+	// Stages dove aspettare che il semaforo sia SIGNALED (all'output del final color)
 	VkPipelineStageFlags waitStages[] = {
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT	// Stages dove controllare il semaforo
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT	
 	};
-		
-	submitInfo.pWaitDstStageMask	= waitStages;
-	submitInfo.commandBufferCount	= 1;								 // Numero di command buffer da inviare
-	submitInfo.pCommandBuffers		= &m_commandBuffer[imageIndex];		 // Command buffer to submit
-	submitInfo.signalSemaphoreCount = 1;								 // Numero di semafori a cui segnalare
-	submitInfo.pSignalSemaphores	= &m_renderFinished[m_currentFrame]; // Semaforo a cui viene inviato il segnale quando il render è terminato
+	
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType				= VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	
+	submitInfo.waitSemaphoreCount	= 1;											   // Numero dei semafori da aspettare
+	submitInfo.pWaitSemaphores		= &m_syncObjects[m_currentFrame].m_imageAvailable; // Semaforo di disponibilità dell'immagine (aspetta che sia SIGNALED)
+	submitInfo.pWaitDstStageMask	= waitStages;									   // Stage dove iniziare la semaphore wait (output del final color, termine della pipeline)
+	
+	submitInfo.commandBufferCount	= 1;								 // Numero di Command Buffer da inviare alla Queue
+	submitInfo.pCommandBuffers		= &m_commandBuffer[imageIndex];		 // Il Command Buffer da inviare non è quello corrente, ma è quello dell'immagine disponile
+	
+	submitInfo.signalSemaphoreCount = 1;												// Numero di semafori a cui segnalare na volta che il CommandBuffer ha terminato
+	submitInfo.pSignalSemaphores	= &m_syncObjects[m_currentFrame].m_renderFinished; // Semaforo di fine Rendering (verrà messo a SIGNALED)
 
-	// Invia il command buffer alla queue, quando finisce di disegnare manda un segnale al relativo Fence del frame
-	VkResult result = vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_drawFences[m_currentFrame]);
+
+	// L'operazione di submit del CommandBuffer alla Queue accade se prima del termine della Pipeline
+	// è presente una nuova immagine disponibile, cosa garantita trammite una semaphore wait su 'm_imageAvailable' 
+	// posizionata proprio prima dell'output stage della Pipeline.
+	// Una volta che l'immagine sarà disponibile verranno eseguite le operazioni del CommandBuffer 
+	// sulla nuova immagine disponibile. Al termine delle operazioni del CommandBuffer il nuovo render sarà pronto
+	// e verrà avvisato con il semaforo 'm_renderFinished'.
+	// Inoltre al termine del render verrà anche avvisato il Fence, per dire che è possibile effettuare
+	// l'operazione di drawing a schermo
+	VkResult result = vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_syncObjects[m_currentFrame].m_inFlight);
 	
 	if (result != VK_SUCCESS)
 	{
-		std::runtime_error("Failed to submit command buffer to queue!");
+		throw std::runtime_error("Failed to submit Command Buffer to Queue!");
 	}
 
-	// -- PRESENTA L'IMMAGINE RENDERIZZATA A SCHERMO --
-	VkPresentInfoKHR presentInfo   = { };
-	presentInfo.sType			   = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;// Tipo di struttura
+	// Presentazione dell'immagine a schermo
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType			   = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.waitSemaphoreCount = 1;									// Numero di semafori da aspettare prima di renderizzare
-	presentInfo.pWaitSemaphores	   = &m_renderFinished[m_currentFrame]; // Semaforo relativo al termine del rendering
+	presentInfo.pWaitSemaphores	   = &m_syncObjects[m_currentFrame].m_renderFinished; // Aspetta che il rendering dell'immagine sia terminato
 	presentInfo.swapchainCount	   = 1;									// Numero di swapchains a cui presentare
 	presentInfo.pSwapchains		   = &m_swapchain;	 					// Swapchain contenente le immagini
-	presentInfo.pImageIndices	   = &imageIndex;						// Indice dell'immagine nella swapchain da visualizzare
+	presentInfo.pImageIndices	   = &imageIndex;						// Indice dell'immagine nella SwapChain da visualizzare (quella nuova pescata dalle immagini disponibili)
 
-	// Presentazione dell'immagine
+	// Prima di effettuare l'operazione di presentazione dell'immagine a schermo si deve assicurare
+	// che il render della nuova immagine sia pronto, cosa che viene assicurata dal semaforo 'm_renderFinished' del frame corrente.
+	// Allora visto che l'immagine è ufficialmente pronta verrà mostrata a schermo
 	result = vkQueuePresentKHR(m_presentationQueue, &presentInfo);
 
 	if (result != VK_SUCCESS)
 	{
-		std::runtime_error("Failed to present the image!");
+		throw std::runtime_error("Failed to present the image!");
 	}
 
-	// Prende il prossimo frame
-	m_currentFrame = (m_currentFrame + 1) % MAX_FRAME_DRAWS;
+	//vkQueueWaitIdle(m_presentationQueue);
+
+	// Passa al prossimo frame
+	m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void VulkanRenderer::createInstance()
 {
+	// Controllare se le Validation Layers sono abilitate
+	std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" };				// Vettore contenente le Validation Layers (come cstring)
+
+	if (enableValidationLayers && !checkValidationLayerSupport(&validationLayers))				// Controlla che le Validation Layers richieste siano effettivamente supportate
+	{																							// (nel caso in cui siano state abilitate).
+		throw std::runtime_error("VkInstance doesn't support the required validation layers");	// Nel caso in cui le Validation Layers non siano disponibili
+	}
+	
 	// APPLICATION INFO (per la creazione di un istanza di Vulkan si necessitano le informazioni a riguardo dell'applicazione)
 	VkApplicationInfo appInfo = {};
 
 	appInfo.sType				= VK_STRUCTURE_TYPE_APPLICATION_INFO; // Tipo di struttura
 	appInfo.pApplicationName	= "Vulkan Render Application";		  // Nome dell'applicazione
 	appInfo.applicationVersion  = VK_MAKE_VERSION(1, 0, 0);			  // Versione personalizzata dell'applicazione
-	appInfo.pEngineName			= "2148_RENDERER";					  // Nome dell'engine
+	appInfo.pEngineName			= "RED_RENDERER";					  // Nome dell'engine
 	appInfo.engineVersion		= VK_MAKE_VERSION(1, 0, 0);			  // Versione personalizzata dell'engine
 	appInfo.apiVersion			= VK_API_VERSION_1_0;				  // Versione di Vulkan che si vuole utilizzare (unico obbligatorio)
 
@@ -174,27 +222,31 @@ void VulkanRenderer::createInstance()
 	createInfo.sType				= VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;	// Tipo di struttura
 	createInfo.pApplicationInfo		= &appInfo;									// Puntatore alle informazioni dell'applicazione
 
-	std::vector <const char*> instanceExtensions = std::vector<const char*>();		// Vettore che conterrà le estensioni (come cstring)
-	loadGlfwExtensions(instanceExtensions);											// Preleva le estensioni di GLFW per Vulkan e le carica nel vettore
-	instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);				// Carica nel vettore l'estensione che permette di creare un debug messanger (e altro...)
+	// Carico in un vettore le estensioni per l'istanza
+	std::vector <const char*> instanceExtensions = std::vector<const char*>(); // Vettore che conterrà le estensioni (come cstring)
+	loadGlfwExtensions(instanceExtensions);									   // Preleva le estensioni di GLFW per Vulkan e le carica nel vettore
+	instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);		   // Carico manualmente nel vettore l'estensione che permette di creare un debug messanger che verrà utilizzato per il Validation Layer (e altro...)
 
 	if (!checkInstanceExtensionSupport(&instanceExtensions))								// Controlla se Vulkan supporta le estensioni presenti in instanceExtensions
 	{
 		throw std::runtime_error("VkInstance doesn't support the required extensions");		// Nel caso in cui le estensioni non siano supportate throwa un errore runtime
 	}
 	
-	std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" };				// Vettore contenente le Validation Layers (come cstring)
-
-	if (enableValidationLayers && !checkValidationLayerSupport(&validationLayers))				// Controlla che le Validation Layers richieste siano effettivamente supportate
-	{																							// (nel caso in cui siano state abilitate).
-		throw std::runtime_error("VkInstance doesn't support the required validation layers");	// Nel caso in cui le Validation Layers non siano disponibili
+	createInfo.enabledExtensionCount   = static_cast<uint32_t>(instanceExtensions.size()); // Numero di estensioni abilitate
+	createInfo.ppEnabledExtensionNames = instanceExtensions.data();						   // Prende le estensioni abilitate (e supportate da Vulkan)
+	
+	if (enableValidationLayers)
+	{
+		createInfo.enabledLayerCount   = static_cast<uint32_t>(validationLayers.size());   // Numero di Validation Layers abilitate.
+		createInfo.ppEnabledLayerNames = validationLayers.data();						   // Prende le Validation Layers abilitate (e supportate da Vulkan)
 	}
-
-	createInfo.enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size()); // Numero di estensioni abilitate
-	createInfo.ppEnabledExtensionNames = instanceExtensions.data();						 // Prende le estensioni abilitate (e supportate da Vulkan)
-	createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());		 // Numero di Validation Layers abilitate.
-	createInfo.ppEnabledLayerNames = validationLayers.data();							 // Prende le Validation Layers abilitate (e supportate da Vulkan)
-	VkResult res = vkCreateInstance(&createInfo, nullptr, &m_instance);					 // Crea un istanza di Vulkan.
+	else
+	{
+		createInfo.enabledLayerCount   = 0;   // Numero di Validation Layers abilitate.
+		createInfo.ppEnabledLayerNames = nullptr;						   // Prende le Validation Layers abilitate (e supportate da Vulkan)
+	}
+	
+	VkResult res = vkCreateInstance(&createInfo, nullptr, &m_instance);					   // Crea un istanza di Vulkan.
 
 	if (res != VK_SUCCESS) // Nel caso in cui l'istanza non venga creata correttamente, alza un eccezione runtime.
 	{
@@ -202,7 +254,7 @@ void VulkanRenderer::createInstance()
 	}
 }
 
-// Scarica le estensioni relative a GLFW
+// Carica le estensioni di GLFW nel vettore dell'istanza di vulkan
 void VulkanRenderer::loadGlfwExtensions(std::vector<const char*>& instanceExtensions)
 {
 	uint32_t glfwExtensionCount = 0;	// GLFW potrebbe richiedere molteplici estensioni
@@ -217,30 +269,32 @@ void VulkanRenderer::loadGlfwExtensions(std::vector<const char*>& instanceExtens
 
 void VulkanRenderer::recordCommands()
 {
-	// Informazioni sul come iniziare ogni command buffer
+	// Informazioni sul come inizializzare ogni Command Buffer
 	VkCommandBufferBeginInfo bufferBeginInfo = {};
-	bufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;  //
+	bufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	
-	// Informazioni sul come iniziare il Render Pass (necessario solo per le applicazioni grafiche)
+	// Informazioni sul come inizializzare il RenderPass (necessario solo per le applicazioni grafiche)
 	VkRenderPassBeginInfo renderPassBeginInfo = {};
-	renderPassBeginInfo.sType			  = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO; // Tipo di struttura 
-	renderPassBeginInfo.renderPass		  = m_renderPass;							  //
-	renderPassBeginInfo.renderArea.offset = { 0,0 };								  // Start point del RenderPass (in Pixels)
-	renderPassBeginInfo.renderArea.extent = m_swapChainExtent;						  // Dimensione delal regione dove eseguire il render pass (partendo dall'offset)
+	renderPassBeginInfo.sType			  = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO; 
+	renderPassBeginInfo.renderPass		  = m_renderPass;	   // RenderPass
+	renderPassBeginInfo.renderArea.offset = { 0, 0 };		   // Start point del RenderPass (in Pixels)
+	renderPassBeginInfo.renderArea.extent = m_swapChainExtent; // Dimensione delal regione dove eseguire il RenderPass (partendo dall'offset)
 
-	// Valori che vengono utilizzati per pulire l'immagine
+	// Valori che vengono utilizzati per pulire l'immagine (background color)
 	VkClearValue clearValues[] = {
 		{0.6f, 0.65f, 0.4f, 1.0f}
 	};
-	renderPassBeginInfo.pClearValues	  = clearValues; // Lista dei clear values (TODO: Depth Attachment)
-	renderPassBeginInfo.clearValueCount   = 1;			 // Un solo clear values utilizzato
 
+	renderPassBeginInfo.pClearValues	= clearValues; // Puntatore ad un array di ClearValues (TODO: Depth Attachment)
+	renderPassBeginInfo.clearValueCount = 1;		   // Numero di ClearValues
+
+	// Per ogni Command Buffer
 	for (size_t i = 0; i < m_commandBuffer.size(); ++i)
 	{
-		// Passiamo un framebuffer per volta
+		// Associo un Framebuffer per volta
 		renderPassBeginInfo.framebuffer = m_swapChainFrameBuffers[i];
 
-		// Inizia a registrare i comandi nel command buffer
+		// Inizia a registrare i comandi nel Command Buffer
 		VkResult res = vkBeginCommandBuffer(m_commandBuffer[i], &bufferBeginInfo);
 		
 		if (res != VK_SUCCESS)
@@ -248,34 +302,38 @@ void VulkanRenderer::recordCommands()
 			throw std::runtime_error("Failed to start recording a Command Buffer!");
 		}
 
-			// Inizio del Render Pass (VK_SUBPASS_CONTENTS_INLINE: tutti i comandi saranno primary cmd)
+			// Inizio del RenderPass
+			// VK_SUBPASS_CONTENTS_INLINE indica che tutti i comandi verranno registrati direttamente sul CommandBuffer primario
+			// e che il CommandBuffer secondario non debba essere eseguito all'interno del Subpass
 			vkCmdBeginRenderPass(m_commandBuffer[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-				// Binding della Pipeline Grafica (VK_PIPELINE_BIND_POINT_GRAPHICS) da utilizzare nel Render Pass
-				// È possibile impostare molteplici pipeline e switchare(per esempio una versione DEFERREd o WIREFRAME)
+				// Binding della Pipeline Grafica ad un Command Buffer.
+				// VK_PIPELINE_BIND_POINT_GRAPHICS, indica il tipo Binding Point della Pipeline (in questo grafico per la grafica).
+				// (È possibile impostare molteplici pipeline e switchare, per esempio una versione DEFERRED o WIREFRAME)
 				vkCmdBindPipeline(m_commandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 				
 				for (size_t j = 0; j < m_meshList.size(); ++j)
 				{
-					VkBuffer vertexBuffers[] = { m_meshList[j].getVertexBuffer() };		// Buffer da bindare prima di essere disegnati
-					VkDeviceSize offsets[] = { 0 };
+					VkBuffer vertexBuffers[] = { m_meshList[j].getVertexBuffer() }; // Buffer da bindare prima di essere disegnati
+					VkDeviceSize offsets[]   = { 0 };
+					
+					// Binding del Vertex Buffer di una Mesh ad un Command Buffer
 					vkCmdBindVertexBuffers(m_commandBuffer[i], 0, 1, vertexBuffers, offsets);
 
-					// Bind l'index buffer della mesh, con offset 0 ed usando uint_32
+					// Bind del Index Buffer di una Mesh ad un Command Buffer, con offset 0 ed usando uint_32
 					vkCmdBindIndexBuffer(m_commandBuffer[i], m_meshList[j].getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
 
-					// Binding dei Descriptor Sets
-					vkCmdBindDescriptorSets(m_commandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout,
-						0, 1, &m_descriptorSets[i], 0, nullptr);
+					// Binding del Descriptor Set ad un Command Buffer
+					vkCmdBindDescriptorSets(m_commandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[i], 0, nullptr);
 
-					// Esegui la pipeline
+					// Invia un Comando di IndexedDraw ad un Command Buffer
 					vkCmdDrawIndexed(m_commandBuffer[i], m_meshList[j].getIndexCount(), 1, 0, 0, 0);
 				}
 
-			// Fine del Render Pass
+			// Termine del Render Pass
 			vkCmdEndRenderPass(m_commandBuffer[i]);
 
-		// Smette di registrare i comandi
+		// Termian la registrazione dei comandi
 		res = vkEndCommandBuffer(m_commandBuffer[i]);
 
 		if (res != VK_SUCCESS)
@@ -283,7 +341,6 @@ void VulkanRenderer::recordCommands()
 			throw std::runtime_error("Failed to stop recording a Command Buffer!");
 		}
 	}
-
 }
 
 // Controlla se le estensioni scaricate siano effettivamente supportate da Vulkan
@@ -350,19 +407,19 @@ void VulkanRenderer::getPhysicalDevice()
 {
 	uint32_t deviceCount = 0;
 
-	vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr); // Prendiamo la quantità dei dispositivi fisici rilevati da Vulkan
+	vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
 
-	if (deviceCount == 0)										   // Nel caso in cui non vengano rilevati dispositivi fisici, alzo un eccezione a runtime
+	if (deviceCount == 0)										  
 	{
-		throw std::runtime_error("Can't find GPU that support Vulkan Instance");
+		throw std::runtime_error("Can't find GPU that support Vulkan Instance!");
 	}
 
-	std::vector<VkPhysicalDevice> deviceList(deviceCount);					 // Dimensiono un vettore per contenere i dispositivi fisici
-	vkEnumeratePhysicalDevices(m_instance, &deviceCount, deviceList.data()); // Scarica i dispositivi fisici all'interno del vettore
+	std::vector<VkPhysicalDevice> deviceList(deviceCount);
+	vkEnumeratePhysicalDevices(m_instance, &deviceCount, deviceList.data()); 
 
-	for (const auto& device : deviceList)			// Controllo tra i device che si trovano all'interno della deviceList
-	{												// e mi fermo al primo dispositivo che è adatto per l'applicazione
-													// (ovvero che contiene delle Queue Families per la grafica)
+	// Mi fermo al primo dispositivo che supporta le QueueFamilies Grafiche
+	for (const auto& device : deviceList)			
+	{												
 		if (checkDeviceSuitable(device))
 		{
 			m_mainDevice.physicalDevice = device;
@@ -383,15 +440,20 @@ bool VulkanRenderer::checkDeviceSuitable(VkPhysicalDevice device)
 	// Informazioni rispetto ai servizi che offre il dispositvo
 	VkPhysicalDeviceFeatures deviceFeatures;
 	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-
 	*/
-	setQueueFamiliesIndices(device);	// Impostiamo gli indici delle Queue Families
 
-	bool const extensionSupported = checkDeviceExtensionSupport(device);	// Controlla che le estensioni richieste siano disponibili nel dispositivo fisico
-	bool swapChainValid = false;
+	// Preleva dal dispositivo fisico gli indici delle QueueFamily per la Grafica e la Presentazione
+	getQueueFamiliesIndices(device);
 
-	if (extensionSupported)	// Se le estensioni sono supportate (quindi anche la Surface) allora posso
-	{						// controllare se la SwapChain è valida
+	// Controlla che le estensioni richieste siano disponibili nel dispositivo fisico
+	bool const extensionSupported = checkDeviceExtensionSupport(device);
+
+
+	bool swapChainValid	= false;
+
+	// Se le estensioni richieste sono supportate (quindi Surface compresa), si procede con la SwapChain
+	if (extensionSupported)
+	{						
 		SwapChainDetails swapChainDetails = getSwapChainDetails(device);
 		swapChainValid = !swapChainDetails.presentationModes.empty() && !swapChainDetails.formats.empty();
 	}
@@ -405,31 +467,32 @@ bool VulkanRenderer::checkDeviceSuitable(VkPhysicalDevice device)
 // Controllo l'esistenza di estensioni all'interno del device fisico
 bool VulkanRenderer::checkDeviceExtensionSupport(VkPhysicalDevice device)
 {
+	// Prelevo il numero di estensioni supportate nel dispositivo fisico
 	uint32_t extensionCount = 0;
-	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);	// Prelevo il numero di estensioni supportate nel dispositivo fisico
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
 
-	if (extensionCount == 0)															// Se non sono presenti estensioni mi fermo
+	if (extensionCount == 0)															
 		return false;
 
-	std::vector<VkExtensionProperties> extensions(extensionCount);						// Nel caso contrario le salvo all'interno del vettore
-	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, extensions.data());
+	std::vector<VkExtensionProperties> physicalDeviceExtensions(extensionCount);						
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, physicalDeviceExtensions.data());
 
-	for (const auto& deviceExtensions : deviceExtensions)				// Controllo se le estensioni richieste sono presenti tra
-	{																	// quelle prelevate dal dispositivo fisico
+	for (const auto& extensionToCheck : m_requestedDeviceExtensions)				
+	{																	
 		bool hasExtension = false;
-		for (const auto& extension : extensions)
+
+		for (const auto& extension : physicalDeviceExtensions)
 		{
-			if (strcmp(deviceExtensions, extension.extensionName) == 0)
+			if (strcmp(extensionToCheck, extension.extensionName) == 0)
 			{
 				hasExtension = true;
 				break;
 			}
 		}
 
-		if (!hasExtension)	// Se non sono state trovate le estensioni richieste
-			return false;	// restituisco false
+		if (!hasExtension)
+			return false;	
 	}
-
 	return true;
 }
 
@@ -457,17 +520,17 @@ VkSurfaceFormatKHR VulkanRenderer::chooseBestSurfaceFormat(const std::vector<VkS
 	return formats[0];
 }
 
+// Se è presenta la modalità MailBox (Triple Buffer) restituisce quella, altrimenti restituisce la FIFO (sempre garantita)
 VkPresentModeKHR VulkanRenderer::chooseBestPresentationMode(const std::vector<VkPresentModeKHR>& presentationModes)
 {
-	for(const auto &presentationMode : presentationModes)	// Cerca se la modalità MailBox è disponibile
+	for(const auto &presentationMode : presentationModes)
 	{
 		if (presentationMode == VK_PRESENT_MODE_MAILBOX_KHR)
 		{
 			return presentationMode;
 		}
 	}
-
-	return VK_PRESENT_MODE_FIFO_KHR; // Fa parte della specifica di Vulkan ed è una modalità SEMPRE presente
+	return VK_PRESENT_MODE_FIFO_KHR;
 }
 
 VkExtent2D VulkanRenderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& surfaceCapabilities)
@@ -522,8 +585,8 @@ void VulkanRenderer::createLogicalDevice()
 	deviceCreateInfo.sType					 = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;			// Tipo di strutturadati da utilizzare.
 	deviceCreateInfo.queueCreateInfoCount	 = static_cast<uint32_t>(queueCreateInfos.size());	// Numero di queue utilizzate nel device logico (corrispondono al numero di strutture "VkDeviceQueueCreateInfo").
 	deviceCreateInfo.pQueueCreateInfos		 = queueCreateInfos.data();							// Puntatore alle createInfo delle Queue
-	deviceCreateInfo.enabledExtensionCount   = static_cast<uint32_t>(deviceExtensions.size());	// Numero di estensioni da utilizzare sul dispositivo logico.
-	deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();							// Puntatore ad un array che contiene le estensioni abilitate (SwapChain, ...).
+	deviceCreateInfo.enabledExtensionCount   = static_cast<uint32_t>(m_requestedDeviceExtensions.size());	// Numero di estensioni da utilizzare sul dispositivo logico.
+	deviceCreateInfo.ppEnabledExtensionNames = m_requestedDeviceExtensions.data();							// Puntatore ad un array che contiene le estensioni abilitate (SwapChain, ...).
 	deviceCreateInfo.pEnabledFeatures		 = new VkPhysicalDeviceFeatures{};					// Features del dispositivo fisico che verranno utilizzate nel device logico (al momento nessuna).
 
 	VkResult result	= vkCreateDevice(m_mainDevice.physicalDevice, &deviceCreateInfo, nullptr, &m_mainDevice.logicalDevice);	// Creo il device logico
@@ -546,60 +609,56 @@ void VulkanRenderer::createLogicalDevice()
 		&m_presentationQueue);
 }
 
-// Crea una Surface, dice a Vulkan come interfacciarsi con mia finestra (Platform Agnostic)
+// Crea una Surface, dice a Vulkan come interfacciare le immagini con la finestra di GLFW
 void VulkanRenderer::createSurface()
 {
-	VkResult res = glfwCreateWindowSurface(	// GLFW restituisce una Surface per Vulkan evita la costruzione
-		m_instance,							// manuale (info struct) e chiama la funzione direttamente restituendone il risultato.
-		m_window, 
-		nullptr, 
-		&m_surface);	
+	VkResult res = glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface);
 																		
 	if (res != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create the surface!");
 	}
-
 }
 
-// Crea la Swap Chain
+// Crea la SwapChain e la salva all'interno del Renderer come 'm_swapChain'.
+// Crea le Image Views e le carica assieme alle Image all'interno del vettore 'm_swapChainImages'
 void VulkanRenderer::createSwapChain()
 {
-	// Preleva le informazioni della SwapChain (Capabilities, Formats, Presentation modes)
+	// Preleva le informazioni della SwapChain (Capabilities, Formats, Presentation modes) a partire dalla Surface
 	SwapChainDetails swapChainDetails = getSwapChainDetails(m_mainDevice.physicalDevice); 
 
-	// Imposto i valori ottimali della Surface in preparazione della SwapChain
+	// Dalle precedenti informazioni seleziono le impostazioni migliori per la SwapChain 
+	VkExtent2D extent				 = chooseSwapExtent(swapChainDetails.surfaceCapabilities);
 	VkSurfaceFormatKHR surfaceFormat = chooseBestSurfaceFormat(swapChainDetails.formats);
 	VkPresentModeKHR presentMode	 = chooseBestPresentationMode(swapChainDetails.presentationModes);
-	VkExtent2D extent				 = chooseSwapExtent(swapChainDetails.surfaceCapabilities);
 	
-	// Numero di immagini presenti nella SwapChain
-	// Serve 1 in più della minima quantità di immagini per utilizzare il triple buffering
+	// Il numero di immagini è 1 immagine in più della quantità minima di immagini per il triple buffering (un immagine trattenuta nella queue)
 	uint32_t imageCount = swapChainDetails.surfaceCapabilities.minImageCount + 1;
 
-	// Se il numero max di immagini è pari a 0, significa non sono presenti limiti (e non che non ci sono immagini)
+	// Se il numero massimo di immagini è positivo e questo numero è minore delle immagini che verranno utilizzate
+	// Allora significa che il massimo numero di immagini disponibile non basta per supportare il triple-buffering
 	if (swapChainDetails.surfaceCapabilities.maxImageCount > 0 && 
-		swapChainDetails.surfaceCapabilities.maxImageCount < imageCount) // Se il massimo numero di immagini è minore delle immagini per il triple buffering
+		swapChainDetails.surfaceCapabilities.maxImageCount < imageCount)
 	{
-		imageCount = swapChainDetails.surfaceCapabilities.maxImageCount; // Allora prendiamo utilizziamo il massimo numero di immagini (significa che il triple-buffering non è disponibile)
+		imageCount = swapChainDetails.surfaceCapabilities.maxImageCount;
 	}
 
 	VkSwapchainCreateInfoKHR swapChainCreateInfo = {};
-	swapChainCreateInfo.sType					 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;			  // Tipo di struttura dati
-	swapChainCreateInfo.surface					 = m_surface;											  // Surface
-	swapChainCreateInfo.imageFormat				 = surfaceFormat.format;								  // Formato della SwapChain
-	swapChainCreateInfo.imageColorSpace			 = surfaceFormat.colorSpace;							  // Spazio colore della SwapChain
+	swapChainCreateInfo.sType					 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;			  
+	swapChainCreateInfo.surface					 = m_surface;											  // Surface alla quale viene bindata la SwapChain
+	swapChainCreateInfo.imageFormat				 = surfaceFormat.format;								  // Formato delle immagini della SwapChain
+	swapChainCreateInfo.imageColorSpace			 = surfaceFormat.colorSpace;							  // Spazio colore delle immagini della SwapChain
 	swapChainCreateInfo.presentMode				 = presentMode;											  // Presentation Mode della SwapChain
-	swapChainCreateInfo.imageExtent				 = extent;												  // Extent della SwapChain 
-	swapChainCreateInfo.minImageCount			 = imageCount;											  // Minimo numero di immagini che la Swap Chain può utilizzare
-	swapChainCreateInfo.imageArrayLayers		 = 1;													  // Numero di livelli per ogni image chain
-	swapChainCreateInfo.imageUsage				 = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;					  // Specifica l'utilizzo dell'immagine, in questo caso che possa essere utilizzata per creare ImageView adatte per i colori
-	swapChainCreateInfo.preTransform			 = swapChainDetails.surfaceCapabilities.currentTransform; // Corrente trasformazione matematica della Surface
-	swapChainCreateInfo.compositeAlpha			 = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;					  // Come vengono gestite le immagini trasparenti con le grafiche esterne (2 finestre che si sovrappongono)
-	swapChainCreateInfo.clipped					 = VK_TRUE;												  // 
+	swapChainCreateInfo.imageExtent				 = extent;												  // Extent (dimensioni in pixels) delle immagini della SwapChain 
+	swapChainCreateInfo.minImageCount			 = imageCount;											  // Minimo numero di immagini utilizzate dalla SwapChain
+	swapChainCreateInfo.imageArrayLayers		 = 1;													  // Numero di viste per una Surface multiview/stereo
+	swapChainCreateInfo.imageUsage				 = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;					  // Specifica l'utilizzo dell'immagine (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT : le Image sono utilizzate per creare ImageView adatte ai colori)
+	swapChainCreateInfo.preTransform			 = swapChainDetails.surfaceCapabilities.currentTransform; // Trasformazione relativa all'orientamento del motore di presentazione (se non combacia con la currentTransform della Surface viene calcolata durante la presentazione)
+	swapChainCreateInfo.compositeAlpha			 = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;					  // Come vengono gestite le immagini trasparenti con Surface esterne (e.g., 2 finestre che si sovrappongono)
+	swapChainCreateInfo.clipped					 = VK_TRUE;												  // Abilitare il clipping tra la Surface e l'ambiente esterno
 
-	// Se le famiglie Graphics e Presentation sono diverse, allora la SwapChain deve lasciare le immagini
-	// in maniera condivise (e concorrente) tra le due queues (non è la scelta più efficente).
+	// Se le famiglie Graphics e Presentation sono diverse, allora la SwapChain deve trattare le immagini
+	// in maniera condivisa e concorrente tra le due queues (non è la modalità più efficente).
 	if (m_queueFamilyIndices.graphicsFamily != m_queueFamilyIndices.presentationFamily)
 	{
 		uint32_t queueFamilyIndices[]{
@@ -607,182 +666,155 @@ void VulkanRenderer::createSwapChain()
 			static_cast<int32_t>(m_queueFamilyIndices.presentationFamily)
 		};
 
-		swapChainCreateInfo.imageSharingMode	  = VK_SHARING_MODE_CONCURRENT;	// Modalità concorrente
-		swapChainCreateInfo.queueFamilyIndexCount = 2;							// Numero di queue utilizzate per la condivisione delle immagini
+		swapChainCreateInfo.imageSharingMode	  = VK_SHARING_MODE_CONCURRENT;	// Modalità concorrente e condivisa
+		swapChainCreateInfo.queueFamilyIndexCount = 2;							// Numero di queue utilizzate
 		swapChainCreateInfo.pQueueFamilyIndices   = queueFamilyIndices;			// Array delle contenente i riferimenti alle Queue
 	}
 	else
 	{
-		swapChainCreateInfo.imageSharingMode	  = VK_SHARING_MODE_EXCLUSIVE;	// Modalità esclusiva ad una sola Queue
-		swapChainCreateInfo.queueFamilyIndexCount = 1;							// Numero di queue utilizzate per la condivisione delle immagini
-		swapChainCreateInfo.pQueueFamilyIndices   = nullptr;					// Array delle contenente i riferimenti alle Queue
+		swapChainCreateInfo.imageSharingMode	  = VK_SHARING_MODE_EXCLUSIVE; // Modalità esclusiva (1 sola queue)
+		swapChainCreateInfo.queueFamilyIndexCount = 1;						   // Numero di queue utilizzate
+		swapChainCreateInfo.pQueueFamilyIndices   = nullptr;				   // Array delle contenente i riferimenti alle Queue
 	}
 
-	// Se la vecchia SwapChain viene sostituita dall'attuale, è possibile fornire un link per trasferirne la responsabilità
-	swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
+	swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE; // La SwapChain viene sostituita dall'attuale, è possibile fornire un link per trasferirne la responsabilità
 
-
-	// Creazione della SwapChain e memorizzazione nel riferimento 'm_swapchain'
+	// Creazione della SwapChain e memorizzazione nel Renderer dentro 'm_swapchain'
 	VkResult res = vkCreateSwapchainKHR(m_mainDevice.logicalDevice, &swapChainCreateInfo, nullptr, &m_swapchain);
 	
-	// Si controlla che la creazione abbia avuto successo
 	if (res != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to create a SwapChain.");
+		throw std::runtime_error("Failed to create a SwapChain!");
 	}
 
-	// Salviamo i riferimenti relativi al formato e all'extent in vista di un utilizzo successivo
+	// Salviamo dei riferimenti relativi al formato e all'extent (servirà nella creazione del RenderPass, TODO)
 	m_swapChainImageFormat = surfaceFormat.format;
 	m_swapChainExtent	   = extent;
 
-	// Preleviamo il numero di immagini presenti nella SwapChain
+	// Salviamo le Image pre-esistenti all'interno della SwapChain in un vettore
 	uint32_t swapChainImageCount = 0;
 	vkGetSwapchainImagesKHR(m_mainDevice.logicalDevice, m_swapchain, &swapChainImageCount, nullptr);
 
-	// Salviamo le immagini all'interno del vettore
 	std::vector <VkImage> images(swapChainImageCount);
 	vkGetSwapchainImagesKHR(m_mainDevice.logicalDevice, m_swapchain, &swapChainImageCount, images.data());
 
-	// Iteriamo sulle immagini della SwapChain e le salviamo in un vettore apparte assieme alla relativa ImageView (creata)
+	// Partendo dalle Image pre-esistenti, costruiamo delle immagini che hanno la stessa Image ed una relativa ImageView
+	// e le aggiungiamo al vettore interno al Renderer 'm_swapChainImages'.
 	for (VkImage image : images)
 	{
 		SwapChainImage swapChainImage = {};
 
-		// Memorizziamo l'mmagine da gestire nella SwapChain
-		swapChainImage.image = image;
-
-		// Creazione e memorizzazione dell'ImageView nella SwapChain
+		swapChainImage.image	 = image;
 		swapChainImage.imageView = createImageView(image, m_swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
-		
-		// Aggiunge alla lista delle immagini per la SwapChain
+
 		m_swapChainImages.push_back(swapChainImage);
 	}
 }
 
+// Creazione di una ImageView partendo da Image, Formato e Aspetto da visualizzare (siamo interessati al colore)
 VkImageView VulkanRenderer::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspetFlags)
 {
 	VkImageViewCreateInfo viewCreateInfo = {};
-	viewCreateInfo.sType		= VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO; // Tipo di struttura dati
-	viewCreateInfo.image		= image;									// Immagine per la quale costruire la ImageView
-	viewCreateInfo.viewType		= VK_IMAGE_VIEW_TYPE_2D;					// Tipo delle immagini
-	viewCreateInfo.format		= format;									// Formato delle immagini
+	viewCreateInfo.sType		= VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO; 
+	viewCreateInfo.image		= image;									// Immagine pre-esistente nella SwapChain
+	viewCreateInfo.viewType		= VK_IMAGE_VIEW_TYPE_2D;					// Tipo delle immagini (2D)
+	viewCreateInfo.format		= format;									// Formato delle immagini (stesso della Surface)
 	viewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;			// Imposto lo swizzle con il valore della componente effettiva
-	viewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;			// Imposto lo swizzle con il valore della componente effettiva
-	viewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;			// Imposto lo swizzle con il valore della componente effettiva
-	viewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;			// Imposto lo swizzle con il valore della componente effettiva
+	viewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;			
+	viewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;			
+	viewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;			
 
-	// Le subresources permettono all'ImageView di visualizzare una sola parte dell'immagine
-	viewCreateInfo.subresourceRange.aspectMask     = aspetFlags; // Quale aspetto dell'immagine visualizzare (e.g. COLOR_BIT, STENCIL, ...)
-	viewCreateInfo.subresourceRange.baseMipLevel   = 0;			 // Livello iniziale della mipmap da visualizzare
-	viewCreateInfo.subresourceRange.levelCount     = 1;			 // Numero di livelli mipmap 
-	viewCreateInfo.subresourceRange.baseArrayLayer = 0;			 // Livello iniziale del primo ArrayLayer
+	// L'intervallo delle sottorisorse dicono all'ImageView quale parte dell'immagine visualizzare
+	viewCreateInfo.subresourceRange.aspectMask     = aspetFlags; // Quale aspetto dell'immagine visualizzare (COLOR, DEPTH, STENCIL)
+	viewCreateInfo.subresourceRange.baseMipLevel   = 0;			 // Livello iniziale della mipmap (primo mipmap level)
+	viewCreateInfo.subresourceRange.levelCount     = 1;			 // Numero di livelli mipmap da visualizzare
+	viewCreateInfo.subresourceRange.baseArrayLayer = 0;			 // Livello iniziale del primo arrayLayer (primo arrayLayer)
 	viewCreateInfo.subresourceRange.layerCount	   = 1;			 // Numero di ArrayLayer
 
-	// Creazione della ImageView
 	VkImageView imageView;
 	VkResult res = vkCreateImageView(m_mainDevice.logicalDevice, &viewCreateInfo, nullptr, &imageView);
 	
-	// Controlliamo se l'ImageView è stata creata con successo
 	if (res != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create an Image View!");
 	}
 
-	// In tal caso la restituiamo
 	return imageView;
 }
 
-// Imposta gli indici della Queue Families nella data structure interna
-void VulkanRenderer::setQueueFamiliesIndices(VkPhysicalDevice device)
+// Preleva gli indici delle Queue Family di Grafica e Presentazione
+void VulkanRenderer::getQueueFamiliesIndices(VkPhysicalDevice device)
 {
+	// Prelevo le Queue Families disponibili nel dispositivo fisico
 	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);				 
+	
+	std::vector<VkQueueFamilyProperties> queueFamilyList(queueFamilyCount);						 
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilyList.data());
 
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);				 // Prelevo la quantità di Queue Families disponibili sul device fisico	
-	std::vector<VkQueueFamilyProperties> queueFamilyList(queueFamilyCount);						 // Creo un vettore della dimensione appropriata
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilyList.data()); // Inserisco le Queue Families nel vettore
-
-	// È responsabilità del programmatore tracciare l'indice delle Queue Families, non sono presenti indici a riguardo nelle strutture dati di Vulkan.
+	// Indice delle Queue Families (a carico del developer)
 	int queueIndex = 0;
 
-	for (const auto& queueFamily : queueFamilyList)
+	if (queueFamilyCount > 0)
 	{
-		if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT))		// Se sono presenti Queue Families e queste Queue Families fanno parte della
-		{																						// famiglia QUEUE_GRAPHICS (queue per la grafica), allora ne salvo l'indice all'interno.
-			m_queueFamilyIndices.graphicsFamily = queueIndex;
-		}
-
-		VkBool32 presentationSupport = false;
-
-		vkGetPhysicalDeviceSurfaceSupportKHR( // Se nella Surface di un Device Fisico è presente una Queue Family che supporta la
-			device,							  // presentation mode, allora restituisci un bool in "presentationSupport"
-			queueIndex,					
-			m_surface,
-			&presentationSupport);		
-
-		if (queueFamilyCount > 0 && presentationSupport)			// Se esiste almeno una Queue Family che supporta la presentation mode
+		for (const auto& queueFamily : queueFamilyList)
 		{
-			m_queueFamilyIndices.presentationFamily = queueIndex;	// allora salvo l'indice di quella Queue Family
-		}
+			// Se la QueueFamily è valida ed è una Queue grafica, salvo l'indice nel Renderer
+			if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)	
+			{																					
+				m_queueFamilyIndices.graphicsFamily = queueIndex;
+			}
 
-		if (m_queueFamilyIndices.isValid())		// Se gli indici delle Queue Families sono tutti validi, fermiamoci
-		{
-			break;
-		}
+			VkBool32 presentationSupport = false;
 
-		++queueIndex;
+			/*	Query per chiedere se è supportata la Presentation Mode nella Queue Family.
+				Solitamente le Queue Family appartenenti alla grafica la supportano.
+				Questa caratteristica è obbligatoria per presentare l'immagine dalla SwapChain alla Surface.*/
+			vkGetPhysicalDeviceSurfaceSupportKHR(device, queueIndex, m_surface, &presentationSupport);
+
+			// Se la Queue Family supporta la Presentation Mode, salvo l'indice nel Renderer (solitamente sono gli stessi indici)
+			if (presentationSupport)
+			{
+				m_queueFamilyIndices.presentationFamily = queueIndex;
+			}
+
+			if (m_queueFamilyIndices.isValid())
+			{
+				break;
+			}
+
+			++queueIndex;
+		}
 	}
 }
 
 // Restituisce le informazioni riguardanti la SwapChain (Surface Capabilities, Formati supportati, Presentation Modes supportate)
 SwapChainDetails VulkanRenderer::getSwapChainDetails(VkPhysicalDevice device)
 {
+	// Surface Capabilities, Surface Image Formats e Presentation Modes
 	SwapChainDetails swapChainDetails;
 
-	/* Surface Capabilities */
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(	// Salva le Surface Capabilities all'interno 
-		device,									// della swapChainDetails.surfaceCapabilities
-		m_surface,
-		&swapChainDetails.surfaceCapabilities);
+	// Query per le proprietà (capabilities) della Surface 
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_surface, &swapChainDetails.surfaceCapabilities);
 
-	/* Formati immagine supportati dalla Surface */
+	// Scarica in un'array delle coppie <Formato Immagine, Spazio Colore> che sono supportate dalla Surface
 	uint32_t formatCount = 0;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(		// Preleva il numero di image formats supportati dalla Surface
-		device,									 
-		m_surface,
-		&formatCount,
-		nullptr);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_surface, &formatCount, nullptr);
 
-	if (formatCount > 0)								// Se il numero di formati supportati è positivo
-	{													// vengono salvate all'interno del vettore 'formats' presente nella struttura dati
+	if (formatCount > 0)								
+	{													
 		swapChainDetails.formats.resize(formatCount);
-
-		vkGetPhysicalDeviceSurfaceFormatsKHR(
-			device,
-			m_surface,
-			&formatCount,
-			swapChainDetails.formats.data()
-		);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_surface, &formatCount, swapChainDetails.formats.data());
 	}
 
-	/* Modalità di presentazione supportate dalla Surface */
+	// Preleva le Presentation Mode supportate dalla Surface
 	uint32_t presentationCount = 0;				 
-	vkGetPhysicalDeviceSurfacePresentModesKHR(	// Preleva il numero di modalità di presentazione supportate dalla surface 
-		device,
-		m_surface,
-		&presentationCount,
-		nullptr
-	);
+	vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_surface, &presentationCount, nullptr);
 
-	if (presentationCount > 0)											// Se il numero di modalità è positivo
+	if (presentationCount > 0)											
 	{
-		swapChainDetails.presentationModes.resize(presentationCount);	// Vengono caricate all'interno del vettore 'presentationModes' presente all'interno della struttura dati
-
-		vkGetPhysicalDeviceSurfacePresentModesKHR(
-			device,
-			m_surface,
-			&presentationCount,
-			swapChainDetails.presentationModes.data()
-		);
+		swapChainDetails.presentationModes.resize(presentationCount);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_surface, &presentationCount, swapChainDetails.presentationModes.data());
 	}
 
 	return swapChainDetails;
@@ -796,11 +828,12 @@ void VulkanRenderer::setupDebugMessenger()
 
 	VkDebugUtilsMessengerCreateInfoEXT createInfo{};
 	createInfo.sType		   = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;	// Il tipo della struttura
-	createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |			// Imposta tutti i tipi di severità a cui siamo interessati
+	createInfo.flags		   = 0;
+	createInfo.messageSeverity = //VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |			// Imposta i tipi di severità a cui siamo interessati
 								 VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
 								 VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 
-	createInfo.messageType	   = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT	|			// Imposta il tipo di messaggio disponibili
+	createInfo.messageType	   = //VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT	|			// Imposta il tipo di messaggio disponibili
 								 VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
 								 VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
 
@@ -813,53 +846,47 @@ void VulkanRenderer::setupDebugMessenger()
 	}
 }
 
-// Callback, formattazione del testo in base al tipo di messaggio
+// Funzione di Callback del DebugMessanger
 VKAPI_ATTR VkBool32 VKAPI_CALL VulkanRenderer::debugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 	VkDebugUtilsMessageTypeFlagsEXT messageType,
 	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
 	void* pUserData)
 {
-
-	if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT &&
-		messageType == VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)
-	{
-		std::cerr << "[Validation Layer][Error][Violation]: "<< pCallbackData->pMessage << "\n\n";
-	}
-	/* Set levels of Validation Layer
-	switch (messageSeverity)
-	{
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-		std::cerr << " [Warning]";
-		break;
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-		std::cerr << " [Verbose]";
-		break;
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-		std::cerr << " [Info]";
-		break;
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-		std::cerr << " [Error]";
-		break;
-	}
-
 	switch (messageType)
 	{
 	case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
 		std::cerr << "-[General]";
 		break;
 	case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
-		std::cerr << "-[Violation]";
+		std::cerr << "-[Validation]";
 		break;
 	case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
-		std::cerr << "-[Non-Optimal]";
+		std::cerr << "-[Performance]";
 		break;
-	}*/
+	}
+
+	switch (messageSeverity)
+	{
+	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+		std::cerr << " [Warning]";
+		break;
+
+	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+		std::cerr << " [Verbose]";
+		break;
+
+	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+		std::cerr << " [Error]";
+		break;
+	}
+
+	std::cerr << pCallbackData->pMessage << "\n\n";
 
 	return VK_FALSE;
 }
 
-// Crea il debug messanger
+// Alloca il DebugMessanger (preleva il comando dall'istanza di Vulkan)
 VkResult VulkanRenderer::CreateDebugUtilsMessengerEXT(
 	VkInstance instance, 
 	const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
@@ -880,7 +907,7 @@ VkResult VulkanRenderer::CreateDebugUtilsMessengerEXT(
 	}
 }
 
-// Distrugge il debug messanger
+// Distrugge il DebugMessanger (preleva il comando dall'istanza di Vulkan)
 void VulkanRenderer::DestroyDebugUtilsMessengerEXT(
 	VkInstance instance, 
 	VkDebugUtilsMessengerEXT m_debugMessenger, 
@@ -898,94 +925,97 @@ void VulkanRenderer::DestroyDebugUtilsMessengerEXT(
 
 void VulkanRenderer::createGraphicPipeline()
 {
-	// Lettura dei codici intermedi SPIR-V
+	/* Shader Modules */
+
+	// Lettura codici intermedi SPIR-V
 	std::vector<char> vertexShaderCode	 = readFile("./shaders/vert.spv");
 	std::vector<char> fragmentShaderCode = readFile("./shaders/frag.spv");
 
-	// Costruzione dei moduli shader
+	// Shader Modules (Vertex & Fragment)
 	VkShaderModule vertexShaderModule	 = createShaderModule(vertexShaderCode);
 	VkShaderModule fragmentShaderModule  = createShaderModule(fragmentShaderCode);
 
-	// -- INFO PER GLI SHADER STAGE --
+	/* Shader Stages */
 
-	// Vertex Stage createinfo
+	// Vertex Stage
 	VkPipelineShaderStageCreateInfo vertexShaderCreateInfo = {};
-	vertexShaderCreateInfo.sType						   = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO; // Tipo di struttura dati
-	vertexShaderCreateInfo.stage						   = VK_SHADER_STAGE_VERTEX_BIT;						  // Nome dello Shader Stage
-	vertexShaderCreateInfo.module						   = vertexShaderModule;								  // Modulo da utilizzare
-	vertexShaderCreateInfo.pName						   = "main";											  // Entry point dello shader
+	vertexShaderCreateInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertexShaderCreateInfo.stage  = VK_SHADER_STAGE_VERTEX_BIT;	// Vertex Shader
+	vertexShaderCreateInfo.module = vertexShaderModule;			// ShaderModule associato
+	vertexShaderCreateInfo.pName  = "main";						// Entry point all'interno del VertexShader
 
-	// Fragment Stage createinfo
+	// Fragment Stage
 	VkPipelineShaderStageCreateInfo fragmentShaderCreateInfo = {};
-	fragmentShaderCreateInfo.sType							 = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO; // Tipo di struttura dati
-	fragmentShaderCreateInfo.stage							 = VK_SHADER_STAGE_FRAGMENT_BIT;						  // Nome dello Shader Stage
-	fragmentShaderCreateInfo.module							 = fragmentShaderModule;								  // Modulo da utilizzare
-	fragmentShaderCreateInfo.pName							 = "main";											  // Entry point dello shader
+	fragmentShaderCreateInfo.sType	= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragmentShaderCreateInfo.stage	= VK_SHADER_STAGE_FRAGMENT_BIT;	// Fragment Shader
+	fragmentShaderCreateInfo.module	= fragmentShaderModule;			// ShaderModule associato
+	fragmentShaderCreateInfo.pName	= "main";						// Entry point all'interno del FragmentShader
 
-	// Vettore di ShaderStage (la pipeline grafica richiede un vettore di shader)
+	// Vettore di ShaderStage, successivamente richiesti dalla Pipeline Grafica
 	VkPipelineShaderStageCreateInfo shaderStages[] = { vertexShaderCreateInfo, fragmentShaderCreateInfo };
 
-	// -- PIPELINE --
 
-	// Descrizione dei dati per un singolo vertice (posizione, colori, tex-coords, normals, ...)
-	VkVertexInputBindingDescription bindingDescription = {}; // Non è una createInfo quindi non ha un sType
-	bindingDescription.binding   = 0;							// Può bindarsi a molteplici streams di dati
-	bindingDescription.stride    = sizeof(Vertex);				// Dimensione di un singolo vertice
-	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; // Come muoversi tra i dati dopo ogni vertice
-																// VK_VERTEX_INPUT_RATE_VERTEX : Si sposta al prossimo vertice
+	/* Vertex Input Binding Description per i Vertex */
+	VkVertexInputBindingDescription bindingDescription = {};
+	bindingDescription.binding   = 0;							// Indice di Binding (possono essere presenti molteplici stream di binding)
+	bindingDescription.stride    = sizeof(Vertex);				// Scostamento tra gli elementi in input forniti dal Vertex
+	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX; // Rateo con cui i vertex attributes sono presi dai buffers TODO
+																// VK_VERTEX_INPUT_RATE_VERTEX	 : Si sposta al prossimo vertice
 																// VK_VERTEX_INPUT_RATE_INSTANCE : Si sposta al prossimo vertice per la prossima istanza
 																
-	// Come i dati per un attributo sono definiti in un vertice
+	// Attribute Descriptions, come interpretare il Vertex Input su un dato binding stream
 	std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions;
 	
-	// Attributo per la posizione
-	attributeDescriptions[0].binding  = 0;						    // Su quale binding di dati si trova (deve essere lo stesso di sopra)
-	attributeDescriptions[0].location = 0;						    // Location di binding nel Vertex Shader
-	attributeDescriptions[0].format	  = VK_FORMAT_R32G32B32_SFLOAT; // Formato assunto dei dati + la dimensione
-	attributeDescriptions[0].offset	  = offsetof(Vertex, pos);		// Dove l'attributo è definito nei dati per un singolo vertice
+	// Attribute for the Vertex Position
+	attributeDescriptions[0].binding  = 0;						    // Stream di binding al quale si riferisce
+	attributeDescriptions[0].location = 0;						    // Locazione del binding nel Vertex Shader
+	attributeDescriptions[0].format	  = VK_FORMAT_R32G32B32_SFLOAT; // Formato e dimensione dell'attributo (32-bit per ogni canale di signed floating point)
+	attributeDescriptions[0].offset	  = offsetof(Vertex, pos);		// Offset della posizione all'interno della struct 'Vertex'
 
-	// Attributo per il colore
-	attributeDescriptions[1].binding = 0;						  
-	attributeDescriptions[1].location = 1;						  
-	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT; 
-	attributeDescriptions[1].offset = offsetof(Vertex, col);		
+	// Attribute for the Vertex Color
+	attributeDescriptions[1].binding  = 0;						    // Stream di binding al quale si riferisce
+	attributeDescriptions[1].location = 1;						    // Locazione del binding nel Vertex Shader
+	attributeDescriptions[1].format	  = VK_FORMAT_R32G32B32_SFLOAT; // Formato e dimensione dell'attributo (32-bit per ogni canale di signed floating point)
+	attributeDescriptions[1].offset   = offsetof(Vertex, col);		// Offset del colore all'interno della struct 'Vertex'
 
+	/* Graphic Pipeline */
 
 	// #1 STAGE - VERTEX INPUT
 	VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
-	vertexInputCreateInfo.sType								= VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputCreateInfo.vertexBindingDescriptionCount		= 1;	// 
-	vertexInputCreateInfo.pVertexBindingDescriptions		= &bindingDescription; // Lista delle descrizioni di binding dei vertici (stride/spacing infos)
-	vertexInputCreateInfo.vertexAttributeDescriptionCount	= static_cast<uint32_t>(attributeDescriptions.size());
-	vertexInputCreateInfo.pVertexAttributeDescriptions		= attributeDescriptions.data(); // Lista delle descrizione degli attributi dei vertici (formato dati, dove bindare nello shader ..)
+	vertexInputCreateInfo.sType							  = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputCreateInfo.vertexBindingDescriptionCount	  = 1;												 	 // Numero di Vertex Binding Descriptions
+	vertexInputCreateInfo.pVertexBindingDescriptions	  = &bindingDescription;								 // Puntatore ad un array di Vertex Binding Description
+	vertexInputCreateInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()); // Numero di Attribute Descriptions
+	vertexInputCreateInfo.pVertexAttributeDescriptions	  = attributeDescriptions.data();						 // Puntatore ad un array di Attribute Descriptions
 
 	// #2 Stage - INPUT ASSEMBLY
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo = {};
 	inputAssemblyCreateInfo.sType				   = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	inputAssemblyCreateInfo.topology			   = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;	// Tipo della primitiva con cui assemblare i vertici
-	inputAssemblyCreateInfo.primitiveRestartEnable = VK_FALSE; // Abilità di ripartire con una nuova strip
+	inputAssemblyCreateInfo.topology			   = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; // Tipo della primitiva con cui assemblare i vertici
+	inputAssemblyCreateInfo.primitiveRestartEnable = VK_FALSE;							  // Abilità di ripartire con una nuova strip
 
 	// #3 Stage - VIEWPORT & SCISSOR
-	// InfoStruct per la viewport
+	
+	// Viewport
 	VkViewport viewport = {};
-	viewport.x			= 0.f;											// Valore iniziale delle coordinate
-	viewport.y			= 0.f;											// Valore iniziale delle coordinate
+	viewport.x			= 0.f;											// Valore iniziale della viewport-x
+	viewport.y			= 0.f;											// Valore iniziale della viewport-y
 	viewport.width		= static_cast<float>(m_swapChainExtent.width);	// Larghezza della viewport
 	viewport.height		= static_cast<float>(m_swapChainExtent.height);	// Altezza della viewport
 	viewport.minDepth	= 0.0f;											// Minima profondità del framebuffer
 	viewport.maxDepth	= 1.0f;											// Massima profondità del framebuffer
 	
-	//InfoStruct per la scissor
+	// Scissor
 	VkRect2D scissor = {};				  
 	scissor.offset	 = { 0,0 };			  // Offset da cui iniziare a tagliare la regione
 	scissor.extent	 = m_swapChainExtent; // Extent che descrive la regione da tagliare
 
 	VkPipelineViewportStateCreateInfo viewportStateCreateInfo = {};
 	viewportStateCreateInfo.sType		  = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	viewportStateCreateInfo.viewportCount = 1;
-	viewportStateCreateInfo.pViewports	  = &viewport;
-	viewportStateCreateInfo.scissorCount  = 1;
-	viewportStateCreateInfo.pScissors	  = &scissor;
+	viewportStateCreateInfo.viewportCount = 1;			// Numero di Viewport
+	viewportStateCreateInfo.pViewports	  = &viewport;  // Puntatore ad un array di viewport
+	viewportStateCreateInfo.scissorCount  = 1;			// Numero di Scissor
+	viewportStateCreateInfo.pScissors	  = &scissor;	// Puntatore ad un array di scissor
 
 	// #4 Stage - DYNAMIC STATES
 	/*
@@ -1007,87 +1037,89 @@ void VulkanRenderer::createGraphicPipeline()
 
 	// #5 Stage - RASTERIZER
 	VkPipelineRasterizationStateCreateInfo rasterizerCreateInfo = {};
-	rasterizerCreateInfo.sType					 = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;	// Tipo di struttura
-	rasterizerCreateInfo.depthClampEnable		 = VK_FALSE;													// Disabilita il clamping della profondità (schiaccia gli oggetti -> problema con ombre)
-	rasterizerCreateInfo.rasterizerDiscardEnable = VK_FALSE;													// Scarta i fragments, non disegna (viene utilizzato per recuperare i dati soltanto dal geometry/tess)
-	rasterizerCreateInfo.polygonMode			 = VK_POLYGON_MODE_FILL;										// Come si vuole colorare la primitiva
-	rasterizerCreateInfo.lineWidth				 = 1.0f;														// Quanto spessa le linee vengono disegnate.
-	rasterizerCreateInfo.cullMode				 = VK_CULL_MODE_BACK_BIT;										// Quale faccia del triangolo non disegnare
-	rasterizerCreateInfo.frontFace				 = VK_FRONT_FACE_COUNTER_CLOCKWISE;								// Rispetto da dove stiamo guardando il triangolo, se i punti sono stati disegnati in ordine orario allora stiamo guardano la primitiva da di fronte
-	rasterizerCreateInfo.depthBiasEnable = VK_FALSE;															// Evita la problematica della Shadow Acne (aggiunge depth bias ai fragments)
+	rasterizerCreateInfo.sType					 = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;	
+	rasterizerCreateInfo.depthClampEnable		 = VK_FALSE;						// Evita il depth-clamping del far-plane, quando un oggetto va al di fuori del farplane 
+																					// viene schiacciato su quest'ultimo anzichè non venir caricato.
+	rasterizerCreateInfo.rasterizerDiscardEnable = VK_FALSE;						// Se abilitato scarta tutti i dati e non crea alcun fragment 
+																					// viene utilizzato per pipeline dove si devono recuperare i dati (dal geometry e tess) e non disegnare niente 
+	rasterizerCreateInfo.polygonMode			 = VK_POLYGON_MODE_FILL;			// Modalità di colorazione della primitiva
+	rasterizerCreateInfo.lineWidth				 = 1.0f;							// Thickness delle linee delle primitive
+	rasterizerCreateInfo.cullMode				 = VK_CULL_MODE_BACK_BIT;			// Quale faccia del triangolo non disegnare (la parte dietro non visibile)
+	rasterizerCreateInfo.frontFace				 = VK_FRONT_FACE_COUNTER_CLOCKWISE;	// Rispetto da dove stiamo guardando il triangolo, se i punti sono stati disegnati in ordine orario allora stiamo guardano la primitiva da di fronte
+	rasterizerCreateInfo.depthBiasEnable		 = VK_FALSE;						// Depth Bias tra i fragments, evita la problematica della Shadow Acne
 	
 	// #6 Stage - MULTISAMPLING
 	VkPipelineMultisampleStateCreateInfo multisampleCreateInfo = {};
-	multisampleCreateInfo.sType				   = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;	// Tipo di struttura dati
-	multisampleCreateInfo.sampleShadingEnable  = VK_FALSE;													// Disabilita 
-	multisampleCreateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;										// Numero di sample utilizzati per fragment
+	multisampleCreateInfo.sType				   = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampleCreateInfo.sampleShadingEnable  = VK_FALSE;				// Disabilita il SampleShading
+	multisampleCreateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;	// Numero di sample utilizzati per fragment
 
-	// #7 Stage - Blending
+	// #7 Stage - BLENDING
 	// Decide come mescolare un nuovo colore in un fragment, utilizzando il vecchio valore
 	// Equazione di blending [LERP] = (srcColour*newColour)colorBlendOp(dstColourBlendFactor * oldColour)
 	VkPipelineColorBlendAttachmentState colourStateAttachment = {};	
-		colourStateAttachment.colorWriteMask  = VK_COLOR_COMPONENT_A_BIT |			// Colori su cui applicare il blending
-												VK_COLOR_COMPONENT_R_BIT |
-												VK_COLOR_COMPONENT_B_BIT |
-												VK_COLOR_COMPONENT_G_BIT;
-	colourStateAttachment.blendEnable			= VK_TRUE;							// Abilita il blending
+	colourStateAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | // Colori su cui applicare (write) il blending
+										   VK_COLOR_COMPONENT_G_BIT |
+										   VK_COLOR_COMPONENT_B_BIT |
+										   VK_COLOR_COMPONENT_A_BIT;
+
+	colourStateAttachment.blendEnable	= VK_TRUE;	// Abilita il blending
+
 	// blending [LERP] = (VK_BLEND_FACTOR_SRC_ALPHA*newColour)colorBlendOp(VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA * oldColour)
 	//			[LERP] = (newColourAlpha * newColour) + ((1-newColourAlpha) * oldColour)
-	colourStateAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;			 // srcColour -> Valore Alpha del colore
-	colourStateAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; // Inversione di alpha
-	colourStateAttachment.colorBlendOp		  = VK_BLEND_OP_ADD;					 // L'operazione di blending è una somma
+	colourStateAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;			 // srcColor -> Componente Alpha
+	colourStateAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; // dstColor -> 1 - Componente Alpha
+	colourStateAttachment.colorBlendOp		  = VK_BLEND_OP_ADD;					 // Operazione di blending (somma)
 
 	// (1*newAlpha) + (0*oldAlpha) = newAlpha
-	colourStateAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;					// Moltiplica il nuovo alpha value per 1
-	colourStateAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;					// Moltiplica il vecchio alpha value per 0
-	colourStateAttachment.alphaBlendOp		  = VK_BLEND_OP_ADD;						// Potremmo utilizzare anche una sottrazione ed il risultato sarebbe il medesimo
+	colourStateAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;  // Moltiplica il nuovo alpha value per 1
+	colourStateAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Moltiplica il vecchio alpha value per 0
+	colourStateAttachment.alphaBlendOp		  = VK_BLEND_OP_ADD;	  // Potremmo utilizzare anche una sottrazione ed il risultato sarebbe il medesimo
 	
 	VkPipelineColorBlendStateCreateInfo colourBlendingCreateInfo = {};
-	colourBlendingCreateInfo.sType			 = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO; // Tipo struttura dati
-	colourBlendingCreateInfo.logicOpEnable	 = VK_FALSE;												 // Un alternativa ai calcoli è quella di usare operazioni logiche
-	colourBlendingCreateInfo.attachmentCount = 1;														 // Quanti attachment stiamo utilizzando
-	colourBlendingCreateInfo.pAttachments	 = &colourStateAttachment;									 // Puntatore a gli allegati
+	colourBlendingCreateInfo.sType			 = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colourBlendingCreateInfo.logicOpEnable	 = VK_FALSE;			   // Disabilita l'alternativa di utilizzare le operazioni logiche al posto dei calcoli aritmetici
+	colourBlendingCreateInfo.attachmentCount = 1;					   // Numero di attachments
+	colourBlendingCreateInfo.pAttachments	 = &colourStateAttachment; // Puntatore ad un array di attachments
 
-	// -- PIPELINE LAYOUT --
+	/* Pipeline Layout */
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
-	pipelineLayoutCreateInfo.sType					= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO; // Tipo di struttura dati
-	pipelineLayoutCreateInfo.setLayoutCount			= 1;											 // Il numero di set Layout
-	pipelineLayoutCreateInfo.pSetLayouts			= &m_descriptorSetLayout;						 // Puntatore ai set layout
-	pipelineLayoutCreateInfo.pushConstantRangeCount = 0;											 // Numero di range count
-	pipelineLayoutCreateInfo.pPushConstantRanges	= nullptr;										 // Puntatore ai range count
+	pipelineLayoutCreateInfo.sType					= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutCreateInfo.setLayoutCount			= 1;					  // Numero di DescriptorSet
+	pipelineLayoutCreateInfo.pSetLayouts			= &m_descriptorSetLayout; // Puntatore ad un array di DescriptorSet
+	pipelineLayoutCreateInfo.pushConstantRangeCount = 0;					  // Numero di PushCostants
+	pipelineLayoutCreateInfo.pPushConstantRanges	= nullptr;				  // Puntatore ad un array di PushCostants
 
-	// Creazione del Pipeline Layout
 	VkResult res = vkCreatePipelineLayout(m_mainDevice.logicalDevice, &pipelineLayoutCreateInfo, nullptr, &m_pipelineLayout);
+
 	if (res != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create Pipeline Layout.");
 	}
 
-	// TODO: Impostare la profondità del deth stencing test
-
-	
+	// TODO: Impostare la profondità del depth stencing test
+		
 	// Creazione della pipeline
 	VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
-	pipelineCreateInfo.sType				= VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO; // Tipo di struttura dati
-	pipelineCreateInfo.stageCount			= 2;											   // Stage count 
-	pipelineCreateInfo.pStages				= shaderStages;									   // Lista degli shaders
-	pipelineCreateInfo.pVertexInputState	= &vertexInputCreateInfo;						   // Vertex Stage
-	pipelineCreateInfo.pInputAssemblyState	= &inputAssemblyCreateInfo;						   // Input Assembly Stage
-	pipelineCreateInfo.pViewportState		= &viewportStateCreateInfo;						   // ViewPort Stage
-	pipelineCreateInfo.pDynamicState		= nullptr;										   // Dynamic States Stage
-	pipelineCreateInfo.pRasterizationState	= &rasterizerCreateInfo;						   // Rasterization Stage
-	pipelineCreateInfo.pMultisampleState	= &multisampleCreateInfo;						   // Multisampling Stage
-	pipelineCreateInfo.pColorBlendState		= &colourBlendingCreateInfo;					   // Colout blending Stage
-	pipelineCreateInfo.pDepthStencilState	= nullptr;										   // Stencil Depth Stage
-	pipelineCreateInfo.layout				= m_pipelineLayout;								   // Layout Stage
-	pipelineCreateInfo.renderPass			= m_renderPass;									   // RenderPass Stage
-	pipelineCreateInfo.subpass				= 0;											   // Subpass utilizzati nel RenderPass
+	pipelineCreateInfo.sType				= VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO; 
+	pipelineCreateInfo.stageCount			= 2;						 // Numero di Shader Stages
+	pipelineCreateInfo.pStages				= shaderStages;				 // Puntatore all'array di Shader Stages
+	pipelineCreateInfo.pVertexInputState	= &vertexInputCreateInfo;	 // Vertex Shader
+	pipelineCreateInfo.pInputAssemblyState	= &inputAssemblyCreateInfo;	 // Input Assembly 
+	pipelineCreateInfo.pViewportState		= &viewportStateCreateInfo;	 // ViewPort 
+	pipelineCreateInfo.pDynamicState		= nullptr;					 // Dynamic States 
+	pipelineCreateInfo.pRasterizationState	= &rasterizerCreateInfo;	 // Rasterization
+	pipelineCreateInfo.pMultisampleState	= &multisampleCreateInfo;	 // Multisampling 
+	pipelineCreateInfo.pColorBlendState		= &colourBlendingCreateInfo; // Colout Blending 
+	pipelineCreateInfo.pDepthStencilState	= nullptr;					 // Depth Stencil
+	pipelineCreateInfo.layout				= m_pipelineLayout;			 // Pipeline Layout
+	pipelineCreateInfo.renderPass			= m_renderPass;				 // RenderPass Stage
+	pipelineCreateInfo.subpass				= 0;						 // Subpass utilizzati nel RenderPass
 	
 	// Le derivate delle pipeline permettono di derivare da un altra pipeline (soluzione ottimale)
 	pipelineCreateInfo.basePipelineHandle   = VK_NULL_HANDLE; // Pipeline da cui derivare
 	pipelineCreateInfo.basePipelineIndex	= -1;			  // Indice della pipeline da cui derivare (in caso in cui siano passate molteplici)
 
-	// Creazione della pipeline grafica
 	res = vkCreateGraphicsPipelines(m_mainDevice.logicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &m_graphicsPipeline);
 
 	if (res != VK_SUCCESS)
@@ -1095,61 +1127,63 @@ void VulkanRenderer::createGraphicPipeline()
 		throw std::runtime_error("Failed to create a Graphics Pipeline!");
 	}
 
-	// -- Distruzione dei moduli shader --
+	// Distruzione degli Shader Module
 	vkDestroyShaderModule(m_mainDevice.logicalDevice, fragmentShaderModule, nullptr);
 	vkDestroyShaderModule(m_mainDevice.logicalDevice, vertexShaderModule, nullptr);
 }
 
-// Costruisce il RenderPass (e i subpass)
+// Costruzione del RenderPass e dei SubPass
 void VulkanRenderer::createRenderPass()
 {
-	// Attachment
+	/* Attachment del RenderPass */
+	// Definizione del Layout iniziale e Layout finale del RenderPass
 	VkAttachmentDescription colourAttachment = {};
-	colourAttachment.format			= m_swapChainImageFormat;			// Formato dell'immagini utilizzato
-	colourAttachment.samples		= VK_SAMPLE_COUNT_1_BIT;			// Numero di samples da utilizzare per il multisampling
+	colourAttachment.flags			= 0;								// Proprietà addizionali degli attachment
+	colourAttachment.format			= m_swapChainImageFormat;			// Formato dell'immagini utilizzato nella SwapChain
+	colourAttachment.samples		= VK_SAMPLE_COUNT_1_BIT;			// Numero di samples da utilizzare per l'immagine (multisampling)
 	colourAttachment.loadOp			= VK_ATTACHMENT_LOAD_OP_CLEAR;		// Dopo aver caricato il colourAttachment performerà un operazione (pulisce l'immagine)
-	colourAttachment.storeOp		= VK_ATTACHMENT_STORE_OP_STORE;		// Dopo che abbiamo terminato con il renderpass si esegue un operazione di store ()
+	colourAttachment.storeOp		= VK_ATTACHMENT_STORE_OP_STORE;		// Al teermine dell'opperazione di RenderPass si esegue un operazione di store dei dati
 	colourAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;  // Descrive cosa fare con lo stencil prima del rendering
-	colourAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // Descrive cosa fare con lo stencil dopo il rendering
+	colourAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // Descrive cosa fare con lo stencil dopo l'ultimo subpass, quindi dopo il rendering
 
-	// FrameBuffer data vengono salvate come immagini, ma alle immagini è possibile utilizzare differenti layout dei dati
-	// questo per motivi di ottimizzazione nell'uso di alcune operazioni
+	// FrameBuffer data vengono salvate come immagini, ma alle immagini è possibile 
+	// fornire differenti layout dei dati, questo per motivi di ottimizzazione nell'uso di alcune operazioni.
+	// Un determinato formato può essere più adatto epr una particolare operazione, per esempio uno shader
+	// legge i dati in un formato particolare, ma quando presentiamo quei dati allo schermo quel formato è differente
+	// perchè deve essere presentato in una certa maniera allo schermo.
 	// È presente un layout intermedio che verrà svolto dai subpasses
-	colourAttachment.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;		// Layout dell'immagini prima del render pass
-	colourAttachment.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;  // Layout delle immagini dopo il render pass (nel quale viene cambiato)
+	colourAttachment.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;		// Layout dell'immagini prima del RenderPass sarà non definito
+	colourAttachment.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;  // Layout delle immagini dopo il RenderPass, l'immagine avrà un formato presentabile
 
-	// SubPass
-	// Per passare gli attachment si utilizzano degli attachment reference che sono degli indici presenti
-	// all'interno di una lista (colourAttachment) che viene passata alla createInfo del RenderPass
+	/* SubPass */
+	// Per passare l'attachment al Subpass si utilizza l'AttachmentReference.
+	// È un tipo di dato che funge da riferimento/indice nella lista 'colourAttachment' definita
+	// nella createInfo del RenderPass.
 	VkAttachmentReference colourAttachmentReference = {};
-	colourAttachmentReference.attachment			= 0;										// L'indice dell'elemento nella lista degli attachments definita nel renderPass ("colourAttachment")
-	colourAttachmentReference.layout				= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // Formato ottimale per il colour attachment (conversione intermedia)
+	colourAttachmentReference.attachment = 0;										 // L'indice dell'elemento nella lista "colourAttachment" definita nel RenderPass.
+	colourAttachmentReference.layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // Formato ottimale per il colorAttachment (conversione implicita UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL)
 
 	VkSubpassDescription subpass = {};
-	subpass.pipelineBindPoint	 = VK_PIPELINE_BIND_POINT_GRAPHICS; // Viene bindato alla pipeline grafica
-	subpass.colorAttachmentCount = 1;								// Numero di ColourAttachment
-	subpass.pColorAttachments	 = &colourAttachmentReference;		// Passo i riferimenti (uno solo) a gli elementi della lista
+	subpass.pipelineBindPoint	 = VK_PIPELINE_BIND_POINT_GRAPHICS; // Tipo di Pipeline supportato dal Subpass (Pipeline Grafica)
+	subpass.colorAttachmentCount = 1;								// Numero di ColourAttachment utilizzati.
+	subpass.pColorAttachments	 = &colourAttachmentReference;		// Puntatore ad un array di colorAttachment
 	
-	// SubPass Dependencies
-	// Abbiamo il bisogno di determinare quando la transizione del layout 
-	// avviene utilizzando le subpass dependencies (transizioni implicite dei layout)
+	/* SubPass Dependencies */
 	std::array<VkSubpassDependency, 2> subpassDependencies;
 		
-	// Conversion from VK_IMAGE_LAYOUT_UNDEFINED to VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+	// VK_IMAGE_LAYOUT_UNDEFINED -> VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+	subpassDependencies[0].srcSubpass	 = VK_SUBPASS_EXTERNAL;					 // La dipendenza ha un ingresso esterno (indice)
+	subpassDependencies[0].srcStageMask  = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; // Indica lo stage dopo il quale accadrà la conversione di layout (dopo il termine del Subpass esterno)
+	subpassDependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;			 // L'operazione (read) che deve essere fatta prima di effettuare la conversione.
 
-	// Prima conversione da VK_IMAGE_LAYOUT_UNDEFINED a VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-	subpassDependencies[0].srcSubpass	 = VK_SUBPASS_EXTERNAL;							  // La dipendenza ha un ingresso esterno (indice)
-	subpassDependencies[0].srcStageMask  = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;		  // La conversione deve avvenire dopo termine dell'ingresso esterno
-	subpassDependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;					  // Prima di effettuare la conversione deve essere letto
+	subpassDependencies[0].dstSubpass	 = 0;											  // La dipendenza ha come destinazione il primo SubPass della lista 'subpass'
+	subpassDependencies[0].dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; // Indica lo stage prima del quale l'operazione deve essere avvenuta (Output del final color).
+	subpassDependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |		  // Indica le operazioni prima delle quali la conversione (read e write) deve essere già avvenuta
+										   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;		  // (Questi access mask indicano gli stage dove accadono)
+	subpassDependencies[0].dependencyFlags = 0;											  // Disabita eventuali flags inerenti all'esecuzione e memoria
 
-	subpassDependencies[0].dstSubpass	   = 0;												// La dipendenza ha come destinazione il primo SubPass della lista 'subpass'
-	subpassDependencies[0].dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; // La conversione deve avvenire prima del Color Output
-	subpassDependencies[0].dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |			// La conversione deve avvenire prima che si provi a leggere o scrivere
-										     VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	subpassDependencies[0].dependencyFlags = 0;												// Disabita eventuali flags inerenti all'esecuzione e memoria
-
-	// Seconda conversione da VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL a VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-	subpassDependencies[1].srcSubpass	 = 0;											  // Indice del primo subPass
+	// VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL -> VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+	subpassDependencies[1].srcSubpass	 = 0;											  // Indice del primo Subpass
 	subpassDependencies[1].srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; // La conversione deve avvenire dopo l'output del final color
 	subpassDependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |		  // La conversione deve avvenire dopo lettura/scrittura
 										   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;		 
@@ -1159,31 +1193,27 @@ void VulkanRenderer::createRenderPass()
 	subpassDependencies[1].dstAccessMask   = VK_ACCESS_MEMORY_READ_BIT;			   // La conversione deve avvenire prima della lettura
 	subpassDependencies[1].dependencyFlags = 0;									   // Disabita eventuali flags inerenti all'esecuzione e memoria
 
-
-	// Create info per il Render Pass
+	/* Render Pass */
 	VkRenderPassCreateInfo renderPassCreateInfo = {};
-	renderPassCreateInfo.sType					= VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;		 // Tipo di struttura dati
-	renderPassCreateInfo.attachmentCount		= 1;												 // Numero di attachment
-	renderPassCreateInfo.pAttachments			= &colourAttachment;								 // Puntatore a gli attachments
-	renderPassCreateInfo.subpassCount			= 1;												 // Numero di subpasses
-	renderPassCreateInfo.pSubpasses				= &subpass;											 // Puntatore ai subpasses
-	renderPassCreateInfo.dependencyCount		= static_cast<uint32_t>(subpassDependencies.size()); // Numero di dependencies
-	renderPassCreateInfo.pDependencies			= subpassDependencies.data();						 // Puntatore alle dependencies
+	renderPassCreateInfo.sType			 = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;		  
+	renderPassCreateInfo.attachmentCount = 1;												  // Numero di attachment presenti nel Renderpass
+	renderPassCreateInfo.pAttachments	 = &colourAttachment;								  // Puntatore all'array di attachments
+	renderPassCreateInfo.subpassCount	 = 1;												  // Numero di Subpasses coinvolti
+	renderPassCreateInfo.pSubpasses		 = &subpass;										  // Puntatore all'array di Subpass
+	renderPassCreateInfo.dependencyCount = static_cast<uint32_t>(subpassDependencies.size()); // Numero di Subpass Dependencies coinvolte
+	renderPassCreateInfo.pDependencies	 = subpassDependencies.data();						  // Puntatore all'array/vector di Subpass Dependencies
 
-	// Creazione del RenderPass
 	VkResult res = vkCreateRenderPass(m_mainDevice.logicalDevice, &renderPassCreateInfo, nullptr, &m_renderPass);
 	
-	// Controllo del renderPass
 	if (res != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Render Pass!");
 	}
 }
 
-// Creazione dei framebuffers e caricamento nel vettore 'm_swapChainFrameBuffers'
+// Creazione dei Framebuffer, effettuano una connessione tra il RenderPass e le immagini. Utilizzando rispettivamente Attachments ed ImageView
 void VulkanRenderer::createFramebuffers()
 {
-	// Dimensione pari al numero di immagini contenute nella swapchain
 	m_swapChainFrameBuffers.resize(m_swapChainImages.size());
 
 	// Creiamo un framebuffer per ogni immagine della swapchain
@@ -1194,15 +1224,14 @@ void VulkanRenderer::createFramebuffers()
 		};
 
 		VkFramebufferCreateInfo frameBufferCreateInfo = {};
-		frameBufferCreateInfo.sType			  = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO; // Tipo di struttura dati
-		frameBufferCreateInfo.renderPass	  = m_renderPass;							   // Render Pass
+		frameBufferCreateInfo.sType			  = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		frameBufferCreateInfo.renderPass	  = m_renderPass;							   // RenderPass
 		frameBufferCreateInfo.attachmentCount = static_cast<uint32_t>(attachments.size()); // Numero degli attachments
-		frameBufferCreateInfo.pAttachments	  = attachments.data();						   // Lista degli attachments 1:1 con il Render Pass
+		frameBufferCreateInfo.pAttachments	  = attachments.data();						   // Lista degli attachments 1:1 con il RenderPass
 		frameBufferCreateInfo.width			  = m_swapChainExtent.width;				   // Framebuffer width
 		frameBufferCreateInfo.height		  = m_swapChainExtent.height;				   // Framebuffer height
 		frameBufferCreateInfo.layers		  = 1;										   // Framebuffer layers
 
-		// Creazione del framebuffer
 		VkResult result = vkCreateFramebuffer(m_mainDevice.logicalDevice, &frameBufferCreateInfo, nullptr, &m_swapChainFrameBuffers[i]);
 
 		if (result != VK_SUCCESS)
@@ -1213,14 +1242,13 @@ void VulkanRenderer::createFramebuffers()
 	}
 }
 
-// Creazione di una command pool
+// Creazione di una Command Pool (permette di allocare i Command Buffers)
 void VulkanRenderer::createCommandPool()
 {
 	VkCommandPoolCreateInfo poolInfo = {};
-	poolInfo.sType			  = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO; // 
-	poolInfo.queueFamilyIndex = m_queueFamilyIndices.graphicsFamily;		//
+	poolInfo.sType			  = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.queueFamilyIndex = m_queueFamilyIndices.graphicsFamily;		// I comandi dei CommandBuffers funzionano solo per le Graphic Queues
 	
-	// Creazione di una command pool per una graphics queue
 	VkResult res = vkCreateCommandPool(m_mainDevice.logicalDevice, &poolInfo, nullptr, &m_graphicsComandPool);
 
 	if (res != VK_SUCCESS)
@@ -1229,48 +1257,52 @@ void VulkanRenderer::createCommandPool()
 	}
 }
 
+// Allocazione dei Command Buffers (gruppi di comandi da inviare alle queues)
 void VulkanRenderer::createCommandBuffers()
 {
-	// Command buffer deve potere contenere tutti i frame buffers
+	// Tanti CommandBuffers quanti FramBuffers
 	m_commandBuffer.resize(m_swapChainFrameBuffers.size());
 
 	VkCommandBufferAllocateInfo cbAllocInfo = {};
-	cbAllocInfo.sType			   = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO; //
-	cbAllocInfo.commandPool		   = m_graphicsComandPool;							  //
-	cbAllocInfo.level			   = VK_COMMAND_BUFFER_LEVEL_PRIMARY;				  // VK_COMMAND_BUFFER_LEVEL_PRIMARY : Buffer che viene inviato direttamente sulla queue. 
-																					  // VK_COMMAND_BUFFER_LEVEL_SECONDARY : Il buffer non può essere chiamato direttamente, ma  da altri buffers via "vkCmdExecureCommands".
-	cbAllocInfo.commandBufferCount = static_cast<uint32_t>(m_commandBuffer.size()); // Quantità di commandbuffers che verranno creati (non si usa un for)
+	cbAllocInfo.sType		= VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cbAllocInfo.commandPool	= m_graphicsComandPool;				// Command Pool dalla quale allocare il Command Buffer
+	cbAllocInfo.level		= VK_COMMAND_BUFFER_LEVEL_PRIMARY;	// Livello del Command Buffer
+																// VK_COMMAND_BUFFER_LEVEL_PRIMARY   : Il CommandBuffer viene inviato direttamente sulla queue. 
+																// VK_COMMAND_BUFFER_LEVEL_SECONDARY : Il CommandBuffer non può essere chiamato direttamente, ma da altri buffers via "vkCmdExecuteCommands".
+	cbAllocInfo.commandBufferCount = static_cast<uint32_t>(m_commandBuffer.size()); // Numero di CommandBuffers da allocare
 
-	// Salva tutti i command buffers dentro 'm_commandBuffer'
 	VkResult res = vkAllocateCommandBuffers(m_mainDevice.logicalDevice, &cbAllocInfo, m_commandBuffer.data());
 	
 	if (res != VK_SUCCESS)
 	{
-		std::runtime_error("Failed to allocate Command Buffers!");
+		throw std::runtime_error("Failed to allocate Command Buffers!");
 	}
 }
 
+// Sincronizzazione : 1 semaforo per le immagini disponibili, 1 semaforo per le immagini presentabili/renderizzate, 1 fence per l'operazione di draw
 void VulkanRenderer::createSynchronisation()
 {
-	m_imageAvailable.resize(MAX_FRAME_DRAWS);
-	m_renderFinished.resize(MAX_FRAME_DRAWS);
-	m_drawFences.resize(MAX_FRAME_DRAWS);
+	m_syncObjects.resize(MAX_FRAMES_IN_FLIGHT);
 
-	// Semaphore creation information
+	//m_renderFinished.resize(MAX_FRAMES_IN_FLIGHT);
+	//m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+	m_imagesInFlight.resize(m_swapChainImages.size(), VK_NULL_HANDLE);
+
+
+	// Semaphore
 	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
 	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-	// Creazione della fence
+	// Fence
 	VkFenceCreateInfo fenceCreateInfo = {};
 	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;		// Specifica che viene creato nello stato di SIGNALED
 
-
-	for (size_t i = 0; i < MAX_FRAME_DRAWS; ++i)
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
-		if (vkCreateSemaphore(m_mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &m_imageAvailable[i]) != VK_SUCCESS || 
-			vkCreateSemaphore(m_mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &m_renderFinished[i]) != VK_SUCCESS ||
-			vkCreateFence(m_mainDevice.logicalDevice, &fenceCreateInfo, nullptr, &m_drawFences[i]) != VK_SUCCESS)
+		if (vkCreateSemaphore(m_mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &m_syncObjects[i].m_imageAvailable) != VK_SUCCESS ||
+			vkCreateSemaphore(m_mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &m_syncObjects[i].m_renderFinished) != VK_SUCCESS ||
+			vkCreateFence(m_mainDevice.logicalDevice,	  &fenceCreateInfo,		nullptr, &m_syncObjects[i].m_inFlight) != VK_SUCCESS)
 		{
 			throw std::runtime_error("Failed to create semaphores and/or Fence!");
 		}
@@ -1281,11 +1313,11 @@ void VulkanRenderer::createDescriptorSetLayout()
 {
 	// Informazioni per il binding della struct MVP
 	VkDescriptorSetLayoutBinding mvpLayoutBinding = {};
-	mvpLayoutBinding.binding		    = 0;								  // Punto di binding nello shader
-	mvpLayoutBinding.descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;  // UBO
-	mvpLayoutBinding.descriptorCount    = 1;								  // Numero di descriptors di bindare
-	mvpLayoutBinding.stageFlags		    = VK_SHADER_STAGE_VERTEX_BIT;		  // Shaders nel quale bindare
-	mvpLayoutBinding.pImmutableSamplers = nullptr;							  // rendere il sampler immutable specificando il layout, serve per le textures
+	mvpLayoutBinding.binding		    = 0;								 // Punto di binding nello shader
+	mvpLayoutBinding.descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; // UBO
+	mvpLayoutBinding.descriptorCount    = 1;								 // Numero di descriptors di bindare
+	mvpLayoutBinding.stageFlags		    = VK_SHADER_STAGE_VERTEX_BIT;		 // Shaders nel quale bindare
+	mvpLayoutBinding.pImmutableSamplers = nullptr;							 // rendere il sampler immutable specificando il layout, serve per le textures
 
 	// Crea il layout per il Descriptor Set
 	VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {};
@@ -1300,23 +1332,22 @@ void VulkanRenderer::createDescriptorSetLayout()
 	{
 		throw std::runtime_error("Failed to create a Descriptor set layout");
 	}
-
 }
 
 void VulkanRenderer::createUniformBuffers()
 {
-	// Dimensione del buffer	
 	VkDeviceSize bufferSize = sizeof(MVP);
 
 	// Un UBO per ogni immagine
 	m_uniformBuffer.resize(m_swapChainImages.size());
 	m_uniformBufferMemory.resize(m_swapChainImages.size());
 
-	// Creazione dell'uniform buffer
 	for (size_t i = 0; i < m_swapChainImages.size(); i++)
 	{
-		createBuffer(m_mainDevice.physicalDevice, m_mainDevice.logicalDevice, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &m_uniformBuffer[i], &m_uniformBufferMemory[i]);
+		createBuffer(m_mainDevice.physicalDevice, m_mainDevice.logicalDevice, bufferSize, 
+					 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+					 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+					 &m_uniformBuffer[i], &m_uniformBufferMemory[i]);
 	}
 }
 
@@ -1336,11 +1367,11 @@ void VulkanRenderer::createDescriptorPool()
 
 	// Creazione della descriptor pool
 	VkResult res = vkCreateDescriptorPool(m_mainDevice.logicalDevice, &poolCreateInfo, nullptr, &m_descriptorPool);
+	
 	if(res!= VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Descriptor Pool!");
 	}
-
 }
 
 void VulkanRenderer::createDescriptorSets()
@@ -1374,7 +1405,7 @@ void VulkanRenderer::createDescriptorSets()
 		VkDescriptorBufferInfo mvpBufferInfo = {};
 		mvpBufferInfo.buffer = m_uniformBuffer[i]; // Buffer da cui prendere i dati
 		mvpBufferInfo.offset = 0;				   // Offset da cui partire
-		mvpBufferInfo.range = sizeof(MVP);		   // Dimensione dei dati
+		mvpBufferInfo.range  = sizeof(MVP);		   // Dimensione dei dati
 
 		VkWriteDescriptorSet mvpSetWrite = {}; // DescriptorSet per MVP
 		mvpSetWrite.sType			= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1388,95 +1419,98 @@ void VulkanRenderer::createDescriptorSets()
 		// Aggiornamento dei descriptor sets con i nuovi dati del buffer/binding
 		vkUpdateDescriptorSets(m_mainDevice.logicalDevice, 1, &mvpSetWrite, 0, nullptr);
 	}
-	
 }
 
+// Copia dei dati MVP della CPU nell'UniformBufferObject della GPU
 void VulkanRenderer::updateUniformFunctions(uint32_t imageIndex)
 {
-
 	void* data;
+	// Mappa l'UniformBufferObject nello spazio di indirizzamento dell'applicazione, salvando nel puntatore 'data' l'intervallo mappato sulla memoria.
 	vkMapMemory(m_mainDevice.logicalDevice, m_uniformBufferMemory[imageIndex], 0, sizeof(MVP), 0, &data);
+
+	// Copio i dati della CPU sulla GPU
 	memcpy(data, &m_mvp, sizeof(MVP));
+
+	// Elimino il mapping
 	vkUnmapMemory(m_mainDevice.logicalDevice, m_uniformBufferMemory[imageIndex]);
 }
 
-// Resituisce lo shader module dato uno specifico SPIR-V
+// Costruzione di uno Shader Module a partire dal codice intermedio SPIR-V
 VkShaderModule VulkanRenderer::createShaderModule(const std::vector<char>& code)
 {
-	// Creazione delle informazioni necessarie per la costruzione del modulo
 	VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
-	shaderModuleCreateInfo.sType	= VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;	  // Tipo di struttura dati
-	shaderModuleCreateInfo.codeSize = code.size();									  // Dimensione del codice
-	shaderModuleCreateInfo.pCode	= reinterpret_cast<const uint32_t*>(code.data()); // Reinterpretazione del puntatore a const char
+	shaderModuleCreateInfo.sType	= VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;	  
+	shaderModuleCreateInfo.codeSize = code.size();									  // Dimensione del codice SPIR-V
+	shaderModuleCreateInfo.pCode	= reinterpret_cast<const uint32_t*>(code.data()); // Puntatore al codice SPIR-V
 
-	// Costruzione dello shader module
 	VkShaderModule shaderModule;
 	VkResult result = vkCreateShaderModule(m_mainDevice.logicalDevice, &shaderModuleCreateInfo, nullptr, &shaderModule);
 
-	// Controllo che lo shader modula sia stato costruito con successo
 	if (result != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to create a shader module!");
+		throw std::runtime_error("Failed to create a Shader Module!");
 	}
 
 	return shaderModule;
 }
 
-// Distruttore
 VulkanRenderer::~VulkanRenderer()
 {
 	cleanup();
 }
 
-// Pulisce il Vulkan Renderer
 void VulkanRenderer::cleanup()
 {
-	// Aspetta finchè nessun azione sia eseguita sul device semza distruggere niente
+	// Aspetta finchè nessun azione sia eseguita sul device senza distruggere niente
+	// Tutte le operazioni effettuate all'interno della draw() sono in asincrono.
+	// Questo significa che all'uscita del loop della init(), le operazionio di drawing
+	// e di presentazione potrebbero ancora essere in corso ed eliminare le risorse mentre esse sono in corso è una pessima idea
+	// quindi è corretto aspettare che il dispositivo sia inattivo prima di eliminare gli oggetti.
 	vkDeviceWaitIdle(m_mainDevice.logicalDevice);
 
-	// Distruzione della pool di descriptor set
+	// Distrugge della Pool di DescriptorSet
 	vkDestroyDescriptorPool(m_mainDevice.logicalDevice, m_descriptorPool, nullptr);
 
-	// Distruzione del layour del descriptor set
+	// Distrugge del layout del DescriptorSet
 	vkDestroyDescriptorSetLayout(m_mainDevice.logicalDevice, m_descriptorSetLayout, nullptr);
 
-	// Distruzione dei buffers per i descriptor set
+	// Distrugge i buffers per i DescriptorSet
 	for (size_t i = 0; i < m_uniformBuffer.size(); i++)
 	{
 		vkDestroyBuffer(m_mainDevice.logicalDevice, m_uniformBuffer[i], nullptr);
 		vkFreeMemory(m_mainDevice.logicalDevice, m_uniformBufferMemory[i], nullptr);
 	}
 
-	// Distruzione delle meshes
+	// Distrugge le Meshes
 	for (size_t i = 0; i < m_meshList.size(); i++)
 	{
 		m_meshList[i].destroyBuffers();
 	}
 
-	// Distrugge i semafori
-	for (size_t i = 0; i < MAX_FRAME_DRAWS; ++i)
+	// Distrugge i Semafori
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
-		vkDestroySemaphore(m_mainDevice.logicalDevice, m_renderFinished[i], nullptr);
-		vkDestroySemaphore(m_mainDevice.logicalDevice, m_imageAvailable[i], nullptr);
-		vkDestroyFence(m_mainDevice.logicalDevice, m_drawFences[i], nullptr);
+		vkDestroySemaphore(m_mainDevice.logicalDevice, m_syncObjects[i].m_renderFinished, nullptr);
+		vkDestroySemaphore(m_mainDevice.logicalDevice, m_syncObjects[i].m_imageAvailable, nullptr);
+		vkDestroyFence(m_mainDevice.logicalDevice, m_syncObjects[i].m_inFlight, nullptr);
 	}
 
-	// Distrugge la commandpool
+	// Distrugge la Command Pool
 	vkDestroyCommandPool(m_mainDevice.logicalDevice, m_graphicsComandPool, nullptr);
 
-	// Distrugge tutti i framebuffers
+	// Distrugge tutti i Framebuffers
 	for (auto framebuffer : m_swapChainFrameBuffers)
 	{
 		vkDestroyFramebuffer(m_mainDevice.logicalDevice, framebuffer, nullptr);
 	}
 
-	// Distrugge la pipeline grafica
+	// Distrugge la Pipeline Grafica
 	vkDestroyPipeline(m_mainDevice.logicalDevice, m_graphicsPipeline, nullptr);
 
-	// Distrugge la pipeline layout
+	// Distrugge la Pipeline Layout
 	vkDestroyPipelineLayout(m_mainDevice.logicalDevice, m_pipelineLayout, nullptr);
 
-	// Distrugge il render pass
+	// Distrugge il RenderPass
 	vkDestroyRenderPass(m_mainDevice.logicalDevice, m_renderPass, nullptr);
 
 	// Distrugge le immagini nella SwapChain
@@ -1485,10 +1519,10 @@ void VulkanRenderer::cleanup()
 		vkDestroyImageView(m_mainDevice.logicalDevice, image.imageView, nullptr);
 	}
 
-	// Distrugge la swapchain
+	// Distrugge la SwapChain
 	vkDestroySwapchainKHR(m_mainDevice.logicalDevice, m_swapchain, nullptr);
 
-	// Distrugge la surface
+	// Distrugge la Surface
 	vkDestroySurfaceKHR(m_instance, m_surface, nullptr);	// Distrugge la Surface (GLFW si utilizza solo per settarla)
 
 	if (enableValidationLayers)
@@ -1496,6 +1530,9 @@ void VulkanRenderer::cleanup()
 		DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
 	}
 
-	vkDestroyDevice(m_mainDevice.logicalDevice, nullptr);	// Distruggo il dispositivo logico
-	vkDestroyInstance(m_instance, nullptr);					// Distruggo l'istanza di Vulkan.
+	// Distrugge il device logico
+	vkDestroyDevice(m_mainDevice.logicalDevice, nullptr);
+	
+	// Distrugge l'istanza di Vulkan
+	vkDestroyInstance(m_instance, nullptr);					
 }
