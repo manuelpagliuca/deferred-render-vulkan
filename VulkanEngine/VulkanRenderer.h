@@ -16,7 +16,7 @@
 #include "Mesh.h"
 #include "Utilities.h"
 
-#ifdef NDEBUG										// Abilita le Validation Layers in caso di Debug
+#ifdef NDEBUG										
 	const bool enableValidationLayers = false;
 #else
 	const bool enableValidationLayers = true;
@@ -30,81 +30,93 @@ public:
 
 	int init(void* newWindow);
 
-	void updateModel(glm::mat4 newModel);
+	void updateModel(int modelID, glm::mat4 newModel);
 
 	void draw();
 	void cleanup();
 
-
 private:
+	GLFWwindow* m_window = nullptr;
+	int m_currentFrame   = 0;	    
+
 	const std::vector<const char*> m_requestedDeviceExtensions =
 	{
 		// SwapChain
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
 	};
-
 private:
-	GLFWwindow* m_window = nullptr;	// Finestra GLFW
-	int m_currentFrame   = 0;	    // Frame corrente
-
-	/* Componenti Vulkan */
-	
+	/* Istanza di Vulkan */
 	VkInstance m_instance;
-	VkDebugUtilsMessengerEXT m_debugMessenger;
 
+	/* Dispositivo Fisico & Logico */
 	struct {
 		VkPhysicalDevice physicalDevice;
 		VkDevice logicalDevice;
-	} m_mainDevice;										// Dispositivo principale (logico-fisico)
+	} m_mainDevice;										
 	 
-	QueueFamilyIndices m_queueFamilyIndices;			// Indici delle Queue Families
+	/* Struct indici delle Queue Families */
+	QueueFamilyIndices m_queueFamilyIndices;			
+
+	/* Surface */
 	VkSurfaceKHR m_surface;								// Surface di Vulkan (interfaccia per la swapchain)
-	VkQueue	m_graphicsQueue;							// Puntatore alla Queue Grafica del device logico
-	VkQueue	m_presentationQueue;						// Puntatore alla Queue di Presentazione del device logico
-	VkSwapchainKHR m_swapchain;							// Puntatore alla SwapChain
-	std::vector<SwapChainImage>  m_swapChainImages;		  // Vettore contenente le Image e ImageView della SwapChain
-	std::vector<VkFramebuffer>   m_swapChainFrameBuffers; //
-	std::vector<VkCommandBuffer> m_commandBuffer;		  // 
+	
+	/* Swap Chain*/
+	VkSwapchainKHR m_swapchain;							
+	std::vector<SwapChainImage> m_swapChainImages;		 // Vettore contenente le Image e ImageView della SwapChain
+	std::vector<VkFramebuffer>  m_swapChainFrameBuffers; //
+
+	/* Queues */
+	VkQueue	m_graphicsQueue;							
+	VkQueue	m_presentationQueue;						
 
 	/* Variabili ausiliarie */
-	VkFormat m_swapChainImageFormat;	// Formato da utilizzare per l'Image View (prelevato dalla creazione della SwapChain)
-	VkExtent2D m_swapChainExtent;		// Extent da utilizzare per l'Image View (prelevato dalla creazione della SwapChain)
+	VkFormat	 m_swapChainImageFormat;   // Formato da utilizzare per l'Image View (prelevato dalla creazione della SwapChain)
+	VkExtent2D	 m_swapChainExtent;		   // Extent da utilizzare per l'Image View (prelevato dalla creazione della SwapChain)
 	
-	/* Pipeline */
-	VkPipeline m_graphicsPipeline;
-	VkPipelineLayout m_pipelineLayout;
-	VkRenderPass m_renderPass;
+	VkDeviceSize m_minUniformBufferOffset;
+	size_t		 m_modelUniformAlignment;
+	UboModel*	 m_modelTransferSpace;
 
-	/* Pools */
+	/* Pipeline */
+	VkPipeline		 m_graphicsPipeline;
+	VkPipelineLayout m_pipelineLayout;
+	VkRenderPass	 m_renderPass;
+
+	/* Command Pools */
 	VkCommandPool m_graphicsComandPool;
+	std::vector<VkCommandBuffer> m_commandBuffer;
+
+	/* Descriptors */
+	VkDescriptorSetLayout		 m_descriptorSetLayout; // Descrive i dati prima di passarli a gli Shaders
+	VkDescriptorPool			 m_descriptorPool;		// Utilizzato per allocare i Descriptor Sets
+	std::vector<VkDescriptorSet> m_descriptorSets;		// Vettore di Descriptor Set
+
+	std::vector<VkBuffer>		 m_viewProjectionUBO;		  // Uniform Buffer per caricare i dati sulla GPU
+	std::vector<VkDeviceMemory>  m_viewProjectionUniformBufferMemory; // Memoria effettivamente allocata sulla GPU per il Descriptor Set
+
+	std::vector<VkBuffer>		 m_modelDynamicUBO;		// Uniform Buffer per caricare i dati sulla GPU
+	std::vector<VkDeviceMemory>  m_modelDynamicUniformBufferMemory; // Memoria effettivamente allocata sulla GPU per il Descriptor Set
 
 	/* Semafori */
-
 	struct SubmissionSyncObjects {
 		VkSemaphore m_imageAvailable; // Avvisa quanto l'immagine è disponibile
 		VkSemaphore m_renderFinished; // Avvisa quando il rendering è terminato
 		VkFence m_inFlight;	  // 
 	};
-
 	std::vector<SubmissionSyncObjects> m_syncObjects;
 
-	/* Descriptors */
-	VkDescriptorSetLayout m_descriptorSetLayout;	   // Come vengono formattati i dati prima di essere passati a gli shaders
-	VkDescriptorPool m_descriptorPool;
-	std::vector<VkDescriptorSet> m_descriptorSets;
-	std::vector<VkBuffer> m_uniformBuffer;			   // 
-	std::vector<VkDeviceMemory> m_uniformBufferMemory; // Contiene effettivamente l'uniform data per il descriptor set
-
+	/* Debug Messanger per Validation Layer*/
+	VkDebugUtilsMessengerEXT m_debugMessenger;
 private:
+
 	// Scene Objects
 	std::vector<Mesh> m_meshList;
 	
 	// Scene Settings
-	struct MVP {
+	struct UboViewProjection {
 		glm::mat4 projection;
 		glm::mat4 view;
-		glm::mat4 model;
-	} m_mvp;
+	} m_UboViewProjection;
 
 	// Funzioni per la creazione
 	void createInstance();													// Creawebzione dell'istanza di Vulkan
@@ -113,8 +125,8 @@ private:
 	SwapChainDetails getSwapChainDetails(VkPhysicalDevice device);
 
 	// Funzioni per l'inizializzazione del Vulkan Renderer
-	void getPhysicalDevice();	// Preleva i dispositivi fisici
-	void createLogicalDevice();	// Crea il dispositivo logico
+	void getPhysicalDevice();	
+	void createLogicalDevice();	
 	void createSurface();
 	void createSwapChain();
 	void createGraphicPipeline();
@@ -129,9 +141,13 @@ private:
 	void createDescriptorPool();
 	void createDescriptorSets();
 
-	void updateUniformFunctions(uint32_t imageIndex);
+	void updateUniformBuffers(uint32_t imageIndex);
+
 	/* Funzioni di registrazione */
 	void recordCommands();
+
+	/* Funzioni di allocazione */
+	void allocateDynamicBufferTransferSpace();
 
 	/* Funzioni di controllo */
 	bool checkInstanceExtensionSupport(std::vector<const char*>* checkExtension); // Controlla se le estensioni (scaricaete) che si vogliono utilizzare sono supportate da Vulkan.

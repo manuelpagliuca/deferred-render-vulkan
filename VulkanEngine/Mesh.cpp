@@ -10,8 +10,8 @@ Mesh::Mesh()
 	m_indexBufferMemory  = 0;
 	m_physicalDevice	 = 0;
 	m_logicalDevice		 = 0;
+	m_uboModel.model	 = glm::mat4(1.0f);
 }
-
 
 // Crea la mesh partendo da "Vertex Data" e "Index Data"
 Mesh::Mesh(VkPhysicalDevice newPhysicalDevice, 
@@ -27,6 +27,8 @@ Mesh::Mesh(VkPhysicalDevice newPhysicalDevice,
 	m_logicalDevice  = newLogicalDevice;
 	createVertexBuffer(transferQueue, transferCommandPool, vertices);
 	createIndexBuffer(transferQueue, transferCommandPool, indices);
+
+	m_uboModel.model = glm::mat4(1.0f);
 }
 
 // Creazione del VertexBuffer
@@ -55,7 +57,6 @@ void Mesh::createVertexBuffer(VkQueue transferQueue, VkCommandPool transferComma
 	vkMapMemory(m_logicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);  // 2. mapping tra la memoria del Vertex Buffer ed il pointer lato host
 	memcpy(data, vertices->data(), static_cast<size_t>(bufferSize));			 // 3. Copio i Vertex Data nel buffer della GPU
 	vkUnmapMemory(m_logicalDevice, stagingBufferMemory);						 // 4. Disassocio il vertice dalla memoria
-
 
 	// Creazione di un buffer accessibile solo dalla GPU (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT).
 	// Il buffer è sia un buffer VK_BUFFER_USAGE_TRANSFER_DST_BIT
@@ -143,4 +144,14 @@ int Mesh::getIndexCount() const
 VkBuffer Mesh::getIndexBuffer() const
 {
 	return m_indexBuffer;
+}
+
+void Mesh::setModel(glm::mat4 newModel)
+{
+	m_uboModel.model = newModel;
+}
+
+UboModel Mesh::getModel() const
+{
+	return m_uboModel;
 }

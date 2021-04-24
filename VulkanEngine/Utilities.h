@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 
 const int MAX_FRAMES_IN_FLIGHT = 3;
+const int MAX_OBJECTS		   = 2;
 
 struct Vertex
 {

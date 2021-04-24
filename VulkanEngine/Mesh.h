@@ -7,6 +7,10 @@
 
 #include "Utilities.h"
 
+struct UboModel {
+	glm::mat4 model;
+};
+
 class Mesh
 {
 public:
@@ -26,7 +30,12 @@ public:
 	int		 getIndexCount() const;
 	VkBuffer getIndexBuffer() const;
 
+	void setModel(glm::mat4 newModel);
+	UboModel getModel() const;
+
 private:
+	UboModel m_uboModel;
+
 	/* Vertex Data */
 	int				 m_vertexCount;
 	VkBuffer		 m_vertexBuffer;

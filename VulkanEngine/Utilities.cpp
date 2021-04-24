@@ -48,7 +48,7 @@ void createBuffer(VkPhysicalDevice physicalDevice, VkDevice device,
 	memoryAllocInfo.memoryTypeIndex = findMemoryTypeIndex(					// Indice del tipo di memoria da utilizzare
 										physicalDevice,
 										memRequirements.memoryTypeBits, 
-										bufferProperties); 
+										bufferProperties);		
 
 	// VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT  : CPU può interagire con la memoria
 	// VK_MEMORY_PROPERTY_HOST_COHERENT_BIT : Permette il posizionamento dei dati direttamente nel buffer dopo il mapping
@@ -66,6 +66,8 @@ void createBuffer(VkPhysicalDevice physicalDevice, VkDevice device,
 }
 
 // Restituisce l'indice per il tipo di memoria desiderato, a partire dal tipo definito dal requisito di memoria
+// supportedMemoryTypes : Requisiti di memoria del buffer
+// properties			: Proprietà della memoria (come la visibilità/accesso del buffer)
 uint32_t findMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t supportedMemoryTypes, VkMemoryPropertyFlags properties)
 {
 	// Query per le proprietà della memoria
@@ -75,12 +77,22 @@ uint32_t findMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t supported
 	// Per ogni tipo di memoria 
 	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
 	{
-		auto firstCond = supportedMemoryTypes & (1 << i);
-		auto secondCond = memoryProperties.memoryTypes[i].propertyFlags & properties;// Indice del tipo di memoria deve matchare con il bit corrispondente nel tipi permessi
+		// Itera per ogni tipo di memoria shiftando a sinistra un 1
+		// in questo modo crea delle varie combinazioni di tipologie di memoria.
+		// Se esiste una combinazione di memoria che è supportata e che quindi è contenuta in "supportedMemoryTypes"
+		// questo significa che si prenderà il tipo di memoria che supporta tutti 
+		// i flag possibili (tutti i bit saranno ad 1, quindi con valore 256).
+		auto supportedMemory  = supportedMemoryTypes & (1U << i);
 
-		if (firstCond && (secondCond == properties))
+		// Itera per ogni tipo di memoria e fa AND BIT-a-BIT con le proprietà del tipo di memoria.
+		// Se dopo questa operazione, il risultato è uguale all proprietà della memoria fornite.
+		// Allora quella proprietà è supportata dall'i-esimo indice
+		auto supportedProperties = (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties;
+
+		// Se il tipo di memoria è stato trovato assieme alle proprietà durante lo stesso ciclo
+		// significa che il tipo di memoria è valido e ne restituiamo l'indice.
+		if (supportedMemory && supportedProperties)
 		{
-			// Allora questo tipo di memoria è valido, quindi si restituisce il suo indice
 			return i;
 		}
 	}
