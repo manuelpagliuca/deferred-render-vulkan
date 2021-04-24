@@ -1,18 +1,5 @@
 #include "Mesh.h"
 
-Mesh::Mesh()
-{
-	m_vertexCount		 = 0;
-	m_indexCount		 = 0;
-	m_vertexBuffer		 = 0;
-	m_vertexBufferMemory = 0;
-	m_indexBuffer		 = 0;
-	m_indexBufferMemory  = 0;
-	m_physicalDevice	 = 0;
-	m_logicalDevice		 = 0;
-	m_uboModel.model	 = glm::mat4(1.0f);
-}
-
 // Crea la mesh partendo da "Vertex Data" e "Index Data"
 Mesh::Mesh(VkPhysicalDevice newPhysicalDevice, 
 		   VkDevice newLogicalDevice, 
@@ -25,10 +12,11 @@ Mesh::Mesh(VkPhysicalDevice newPhysicalDevice,
 	m_indexCount	 = indices->size();
 	m_physicalDevice = newPhysicalDevice;
 	m_logicalDevice  = newLogicalDevice;
+
 	createVertexBuffer(transferQueue, transferCommandPool, vertices);
 	createIndexBuffer(transferQueue, transferCommandPool, indices);
 
-	m_uboModel.model = glm::mat4(1.0f);
+	m_model.model	 = glm::mat4(1.0f);
 }
 
 // Creazione del VertexBuffer
@@ -136,22 +124,22 @@ void Mesh::destroyBuffers()
 	vkFreeMemory(m_logicalDevice, m_indexBufferMemory, nullptr);
 }
 
-int Mesh::getIndexCount() const
+int Mesh::getIndexCount()
 {
 	return m_indexCount;
 }
 
-VkBuffer Mesh::getIndexBuffer() const
+VkBuffer Mesh::getIndexBuffer()
 {
 	return m_indexBuffer;
 }
 
 void Mesh::setModel(glm::mat4 newModel)
 {
-	m_uboModel.model = newModel;
+	m_model.model = newModel;
 }
 
-UboModel Mesh::getModel() const
+Model Mesh::getModel()
 {
-	return m_uboModel;
+	return m_model;
 }

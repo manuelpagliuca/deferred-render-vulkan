@@ -7,14 +7,14 @@
 
 #include "Utilities.h"
 
-struct UboModel {
+struct Model {
 	glm::mat4 model;
 };
 
 class Mesh
 {
 public:
-	Mesh();
+	Mesh()  = default;
 	~Mesh() = default;
 	Mesh(VkPhysicalDevice newPhysicalDevice,
 		 VkDevice newLogicalDevice, 
@@ -27,14 +27,15 @@ public:
 	VkBuffer getVertexBuffer();
 	void	 destroyBuffers();
 
-	int		 getIndexCount() const;
-	VkBuffer getIndexBuffer() const;
+	int		 getIndexCount();
+	VkBuffer getIndexBuffer();
 
 	void setModel(glm::mat4 newModel);
-	UboModel getModel() const;
+	Model getModel();
+	const void* getData() { return &m_model; }
 
 private:
-	UboModel m_uboModel;
+	Model m_model;
 
 	/* Vertex Data */
 	int				 m_vertexCount;

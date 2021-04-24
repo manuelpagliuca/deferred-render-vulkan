@@ -46,6 +46,7 @@ int VulkanRenderer::init(void* t_window)
 		createSwapChain();
 		createDescriptorSetLayout();
 		createRenderPass();
+		createPushCostantRange();
 		createGraphicPipeline();
 		createFramebuffers();
 		createCommandPool();
@@ -96,11 +97,10 @@ int VulkanRenderer::init(void* t_window)
 		m_meshList[0].setModel(meshModelMatrix);
 
 		createCommandBuffers();
-		allocateDynamicBufferTransferSpace();
+		//allocateDynamicBufferTransferSpace(); // DYNAMIC UBO
 		createUniformBuffers();
 		createDescriptorPool();
 		createDescriptorSets();
-		recordCommands();
 		createSynchronisation();
 	}
 	catch (std::runtime_error& e)
@@ -134,7 +134,7 @@ void VulkanRenderer::draw()
 
 	// Metto la Fence ad UNSIGNALED (la GPU deve aspettare per la prossima operazione di draw)
 	vkResetFences(m_mainDevice.logicalDevice, 1, &m_syncObjects[m_currentFrame].m_inFlight);
-		
+	
 	// Recupero l'index della prossima immagine disponibile della SwapChain,
 	// e mette SIGNALED il relativo semaforo 'm_imageAvailable' per avvisare
 	// che l'immagine è pronta ad essere utilizzata.
@@ -142,6 +142,9 @@ void VulkanRenderer::draw()
 	vkAcquireNextImageKHR(m_mainDevice.logicalDevice, m_swapchain,
 						  std::numeric_limits<uint64_t>::max(),
 					      m_syncObjects[m_currentFrame].m_imageAvailable, VK_NULL_HANDLE, &imageIndex);
+
+
+	recordCommands(imageIndex);
 
 	// Copia nell'UniformBuffer della GPU le matrici m_uboViewProjection
 	updateUniformBuffers(imageIndex);
@@ -273,12 +276,13 @@ void VulkanRenderer::loadGlfwExtensions(std::vector<const char*>& instanceExtens
 	}
 }
 
-void VulkanRenderer::recordCommands()
+void VulkanRenderer::recordCommands(uint32_t currentImage)
 {
 	// Informazioni sul come inizializzare ogni Command Buffer
 	VkCommandBufferBeginInfo bufferBeginInfo = {};
 	bufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	
+	bufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT; // Il buffer può essere re-inviato al momento della resubmit
+
 	// Informazioni sul come inizializzare il RenderPass (necessario solo per le applicazioni grafiche)
 	VkRenderPassBeginInfo renderPassBeginInfo = {};
 	renderPassBeginInfo.sType			  = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO; 
@@ -294,64 +298,66 @@ void VulkanRenderer::recordCommands()
 	renderPassBeginInfo.pClearValues	= clearValues; // Puntatore ad un array di ClearValues (TODO: Depth Attachment)
 	renderPassBeginInfo.clearValueCount = 1;		   // Numero di ClearValues
 
-	// Per ogni Command Buffer
-	for (size_t i = 0; i < m_commandBuffer.size(); ++i)
-	{
-		// Associo un Framebuffer per volta
-		renderPassBeginInfo.framebuffer = m_swapChainFrameBuffers[i];
+	// Associo un Framebuffer per volta
+	renderPassBeginInfo.framebuffer = m_swapChainFrameBuffers[currentImage];
 
-		// Inizia a registrare i comandi nel Command Buffer
-		VkResult res = vkBeginCommandBuffer(m_commandBuffer[i], &bufferBeginInfo);
+	// Inizia a registrare i comandi nel Command Buffer
+	VkResult res = vkBeginCommandBuffer(m_commandBuffer[currentImage], &bufferBeginInfo);
 		
-		if (res != VK_SUCCESS)
-		{
-			throw std::runtime_error("Failed to start recording a Command Buffer!");
-		}
+	if (res != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to start recording a Command Buffer!");
+	}
 
-			// Inizio del RenderPass
-			// VK_SUBPASS_CONTENTS_INLINE indica che tutti i comandi verranno registrati direttamente sul CommandBuffer primario
-			// e che il CommandBuffer secondario non debba essere eseguito all'interno del Subpass
-			vkCmdBeginRenderPass(m_commandBuffer[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+	// Inizio del RenderPass
+	// VK_SUBPASS_CONTENTS_INLINE indica che tutti i comandi verranno registrati direttamente sul CommandBuffer primario
+	// e che il CommandBuffer secondario non debba essere eseguito all'interno del Subpass
+	vkCmdBeginRenderPass(m_commandBuffer[currentImage], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-				// Binding della Pipeline Grafica ad un Command Buffer.
-				// VK_PIPELINE_BIND_POINT_GRAPHICS, indica il tipo Binding Point della Pipeline (in questo grafico per la grafica).
-				// (È possibile impostare molteplici pipeline e switchare, per esempio una versione DEFERRED o WIREFRAME)
-				vkCmdBindPipeline(m_commandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
+		// Binding della Pipeline Grafica ad un Command Buffer.
+		// VK_PIPELINE_BIND_POINT_GRAPHICS, indica il tipo Binding Point della Pipeline (in questo grafico per la grafica).
+		// (È possibile impostare molteplici pipeline e switchare, per esempio una versione DEFERRED o WIREFRAME)
+		vkCmdBindPipeline(m_commandBuffer[currentImage], VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 				
-				for (size_t j = 0; j < m_meshList.size(); ++j)
-				{
-					VkBuffer vertexBuffers[] = { m_meshList[j].getVertexBuffer() }; // Buffer da bindare prima di essere disegnati
-					VkDeviceSize offsets[]   = { 0 };
-					
-					// Binding del Vertex Buffer di una Mesh ad un Command Buffer
-					vkCmdBindVertexBuffers(m_commandBuffer[i], 0, 1, vertexBuffers, offsets);
-
-					// Bind del Index Buffer di una Mesh ad un Command Buffer, con offset 0 ed usando uint_32
-					vkCmdBindIndexBuffer(m_commandBuffer[i], m_meshList[j].getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
-
-					// Binding del Descriptor Set ad un Command Buffer
-					uint32_t dynamicOffset = static_cast<uint32_t>(m_modelUniformAlignment) * static_cast<uint32_t>(j);
-					
-					vkCmdBindDescriptorSets(m_commandBuffer[i], VK_PIPELINE_BIND_POINT_GRAPHICS, 
-						m_pipelineLayout, 0, 1, &m_descriptorSets[i], 1, &dynamicOffset);
-
-					// Invia un Comando di IndexedDraw ad un Command Buffer
-					vkCmdDrawIndexed(m_commandBuffer[i], m_meshList[j].getIndexCount(), 1, 0, 0, 0);
-				}
-
-			// Termine del Render Pass
-			vkCmdEndRenderPass(m_commandBuffer[i]);
-
-		// Termian la registrazione dei comandi
-		res = vkEndCommandBuffer(m_commandBuffer[i]);
-
-		if (res != VK_SUCCESS)
+		for (size_t j = 0; j < m_meshList.size(); ++j)
 		{
-			throw std::runtime_error("Failed to stop recording a Command Buffer!");
+			VkBuffer vertexBuffers[] = { m_meshList[j].getVertexBuffer() }; // Buffer da bindare prima di essere disegnati
+			VkDeviceSize offsets[]   = { 0 };
+					
+			// Binding del Vertex Buffer di una Mesh ad un Command Buffer
+			vkCmdBindVertexBuffers(m_commandBuffer[currentImage], 0, 1, vertexBuffers, offsets);
+
+			// Bind del Index Buffer di una Mesh ad un Command Buffer, con offset 0 ed usando uint_32
+			vkCmdBindIndexBuffer(m_commandBuffer[currentImage], m_meshList[j].getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+			Model m = m_meshList[j].getModel();
+
+			vkCmdPushConstants(m_commandBuffer[currentImage], m_pipelineLayout, 
+				VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Model), &m);
+
+			// Binding del Descriptor Set ad un Command Buffer DYNAMIC UBO
+			//uint32_t dynamicOffset = static_cast<uint32_t>(m_modelUniformAlignment) * static_cast<uint32_t>(j);
+
+			vkCmdBindDescriptorSets(m_commandBuffer[currentImage], VK_PIPELINE_BIND_POINT_GRAPHICS,
+				m_pipelineLayout, 0, 1, &m_descriptorSets[currentImage], 0, nullptr);
+
+			// Invia un Comando di IndexedDraw ad un Command Buffer
+			vkCmdDrawIndexed(m_commandBuffer[currentImage], m_meshList[j].getIndexCount(), 1, 0, 0, 0);
 		}
+
+	// Termine del Render Pass
+	vkCmdEndRenderPass(m_commandBuffer[currentImage]);
+
+	// Termian la registrazione dei comandi
+	res = vkEndCommandBuffer(m_commandBuffer[currentImage]);
+
+	if (res != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to stop recording a Command Buffer!");
 	}
 }
 
+// DYNAMIC UBO (NON UTILIZZATI)
 void VulkanRenderer::allocateDynamicBufferTransferSpace()
 {
 	// Allineamento dei dati per la Model
@@ -386,12 +392,12 @@ void VulkanRenderer::allocateDynamicBufferTransferSpace()
 		Ora aggiungendo questi bit alla dimensione della Model dovrebbe essere protetta.
 	*/
 
-	unsigned long long const offsetMask			= ~(m_minUniformBufferOffset - 1);
-	unsigned long long const protectedModelSize = (sizeof(UboModel) + m_minUniformBufferOffset - 1);
+	/*unsigned long long const offsetMask			= ~(m_minUniformBufferOffset - 1);
+	unsigned long long const protectedModelSize = (sizeof(Model) + m_minUniformBufferOffset - 1);
 	m_modelUniformAlignment = protectedModelSize & offsetMask;
 
 	// Allocazione spazio in memoria per gestire il dynamic buffer che è allineato, e con un limite di oggetti
-	m_modelTransferSpace = (UboModel*)_aligned_malloc(m_modelUniformAlignment * MAX_OBJECTS, m_modelUniformAlignment);
+	m_modelTransferSpace = (Model*)_aligned_malloc(m_modelUniformAlignment * MAX_OBJECTS, m_modelUniformAlignment);*/
 }
 
 // Controlla se le estensioni scaricate siano effettivamente supportate da Vulkan
@@ -482,7 +488,7 @@ void VulkanRenderer::getPhysicalDevice()
 	VkPhysicalDeviceProperties deviceProperties;
 	vkGetPhysicalDeviceProperties(m_mainDevice.physicalDevice, &deviceProperties);
 
-	m_minUniformBufferOffset = deviceProperties.limits.minUniformBufferOffsetAlignment;
+	//m_minUniformBufferOffset = deviceProperties.limits.minUniformBufferOffsetAlignment;// serve per DYNAMIC UBO
 
 }
 
@@ -1145,8 +1151,8 @@ void VulkanRenderer::createGraphicPipeline()
 	pipelineLayoutCreateInfo.sType					= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutCreateInfo.setLayoutCount			= 1;					  // Numero di DescriptorSet
 	pipelineLayoutCreateInfo.pSetLayouts			= &m_descriptorSetLayout; // Puntatore ad una lista di DescriptorSetLayout
-	pipelineLayoutCreateInfo.pushConstantRangeCount = 0;					  // Numero di PushCostants
-	pipelineLayoutCreateInfo.pPushConstantRanges	= nullptr;				  // Puntatore ad un array di PushCostants
+	pipelineLayoutCreateInfo.pushConstantRangeCount = 1;					  // Numero di PushCostants
+	pipelineLayoutCreateInfo.pPushConstantRanges	= &m_pushCostantRange;	  // Puntatore ad un array di PushCostants
 
 	VkResult res = vkCreatePipelineLayout(m_mainDevice.logicalDevice, &pipelineLayoutCreateInfo, nullptr, &m_pipelineLayout);
 
@@ -1305,7 +1311,8 @@ void VulkanRenderer::createCommandPool()
 {
 	VkCommandPoolCreateInfo poolInfo = {};
 	poolInfo.sType			  = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	poolInfo.queueFamilyIndex = m_queueFamilyIndices.graphicsFamily;		// I comandi dei CommandBuffers funzionano solo per le Graphic Queues
+	poolInfo.flags			  = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // Il nostro CommandBuffer viene resettato ogni qualvolta si accede alla 'vkBeginCommandBuffer()'
+	poolInfo.queueFamilyIndex = m_queueFamilyIndices.graphicsFamily;			 // I comandi dei CommandBuffers funzionano solo per le Graphic Queues
 	
 	VkResult res = vkCreateCommandPool(m_mainDevice.logicalDevice, &poolInfo, nullptr, &m_graphicsComandPool);
 
@@ -1373,15 +1380,15 @@ void VulkanRenderer::createDescriptorSetLayout()
 	viewProjectionLayoutBinding.stageFlags		   = VK_SHADER_STAGE_VERTEX_BIT;		// Shaders Stage nel quale viene effettuato il binding
 	viewProjectionLayoutBinding.pImmutableSamplers = nullptr;							// rendere il sampler immutable specificando il layout, serve per le textures
 
-	// Model Binding Info
-	VkDescriptorSetLayoutBinding modelLayoutBinding = {};
+	// Model Binding Info (DYNAMIC UBO)
+	/*VkDescriptorSetLayoutBinding modelLayoutBinding = {};
 	modelLayoutBinding.binding			   = 1;											// Punto di binding nello Shader
 	modelLayoutBinding.descriptorType	   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC; // Tipo di Descriptor Set (Dynamic Uniform Buffer Object)
 	modelLayoutBinding.descriptorCount	   = 1;											// Numero di Descriptor Set da bindare
 	modelLayoutBinding.stageFlags		   = VK_SHADER_STAGE_VERTEX_BIT;				// Shaders Stage nel quale viene effettuato il binding
 	modelLayoutBinding.pImmutableSamplers = nullptr;									// rendere il sampler immutable specificando il layout, serve per le textures
-
-	std::vector<VkDescriptorSetLayoutBinding> layoutBindings = { viewProjectionLayoutBinding , modelLayoutBinding };
+	*/
+	std::vector<VkDescriptorSetLayoutBinding> layoutBindings = { viewProjectionLayoutBinding };
 
 	// Crea il layout per il Descriptor Set
 	VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {};
@@ -1398,17 +1405,24 @@ void VulkanRenderer::createDescriptorSetLayout()
 	}
 }
 
+void VulkanRenderer::createPushCostantRange()
+{
+	m_pushCostantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;  // Stage dove finiranno le push costant
+	m_pushCostantRange.offset	  = 0;
+	m_pushCostantRange.size		  = sizeof(Model);
+}
+
 void VulkanRenderer::createUniformBuffers()
 {
 	VkDeviceSize viewProjectionBufferSize = sizeof(m_UboViewProjection);
-	VkDeviceSize modelBufferSize		  = m_modelUniformAlignment * MAX_OBJECTS;
+	//VkDeviceSize modelBufferSize		  = m_modelUniformAlignment * MAX_OBJECTS;
 
 	// Un UBO per ogni immagine della Swap Chain
 	m_viewProjectionUBO.resize(m_swapChainImages.size());
 	m_viewProjectionUniformBufferMemory.resize(m_swapChainImages.size());
-
+	/*
 	m_modelDynamicUBO.resize(m_swapChainImages.size());
-	m_modelDynamicUniformBufferMemory.resize(m_swapChainImages.size());
+	m_modelDynamicUniformBufferMemory.resize(m_swapChainImages.size());*/
 
 	for (size_t i = 0; i < m_swapChainImages.size(); i++)
 	{
@@ -1417,26 +1431,28 @@ void VulkanRenderer::createUniformBuffers()
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 			&m_viewProjectionUBO[i], &m_viewProjectionUniformBufferMemory[i]);
-
+		/* DYNAMIC UBO
 		createBuffer(m_mainDevice.physicalDevice, m_mainDevice.logicalDevice,
 			modelBufferSize,
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			&m_modelDynamicUBO[i], &m_modelDynamicUniformBufferMemory[i]);
+			&m_modelDynamicUBO[i], &m_modelDynamicUniformBufferMemory[i]);*/
 	}
 }
 
 void VulkanRenderer::createDescriptorPool()
 {
-	VkDescriptorPoolSize viewProjectPoolSize = {};
-	viewProjectPoolSize.type			= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;			   // Che tipo di descriptor contiene (non è un descriptor set ma sono quelli presenti negli shaders)
-	viewProjectPoolSize.descriptorCount = static_cast<uint32_t> (m_viewProjectionUBO.size()); // Quanti descriptor
+	// VIEW - PROJECTION
+	VkDescriptorPoolSize vpPoolSize = {};
+	vpPoolSize.type			= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;			   // Che tipo di descriptor contiene (non è un descriptor set ma sono quelli presenti negli shaders)
+	vpPoolSize.descriptorCount = static_cast<uint32_t> (m_viewProjectionUBO.size()); // Quanti descriptor
 
-	VkDescriptorPoolSize modelPoolSize = {};
+	// MODEL (DYNAMIC UBO)
+	/*VkDescriptorPoolSize modelPoolSize = {};
 	modelPoolSize.type			  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-	modelPoolSize.descriptorCount = static_cast<uint32_t>(m_modelDynamicUBO.size());
+	modelPoolSize.descriptorCount = static_cast<uint32_t>(m_modelDynamicUBO.size()); */
 
-	std::vector<VkDescriptorPoolSize> descriptorPoolSizes = { viewProjectPoolSize , modelPoolSize };
+	std::vector<VkDescriptorPoolSize> descriptorPoolSizes = { vpPoolSize };
 
 	// Data per la creazione della pool
 	VkDescriptorPoolCreateInfo poolCreateInfo = {};
@@ -1480,23 +1496,24 @@ void VulkanRenderer::createDescriptorSets()
 	// Aggiornamento dei bindings dei descriptor sets
 	for (size_t i = 0; i < m_swapChainImages.size(); ++i)
 	{
-		
 		// VIEW-PROJECTION DESCRIPTOR
-		VkDescriptorBufferInfo viewProjectionBufferInfo = {};
-		viewProjectionBufferInfo.buffer = m_viewProjectionUBO[i];		// Buffer da cui prendere i dati
-		viewProjectionBufferInfo.offset = 0;							// Offset da cui partire
-		viewProjectionBufferInfo.range  = sizeof(m_UboViewProjection);	// Dimensione dei dati
+		
+		
+		VkDescriptorBufferInfo vpBufferInfo = {};
+		vpBufferInfo.buffer = m_viewProjectionUBO[i];		// Buffer da cui prendere i dati
+		vpBufferInfo.offset = 0;							// Offset da cui partire
+		vpBufferInfo.range  = sizeof(m_UboViewProjection);	// Dimensione dei dati
 
-		VkWriteDescriptorSet viewProjectionSetWrite = {}; // DescriptorSet per m_uboViewProjection
-		viewProjectionSetWrite.sType		   = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		viewProjectionSetWrite.dstSet		   = m_descriptorSets[i];
-		viewProjectionSetWrite.dstBinding	   = 0;										// Vogliamo aggiornare quello che binda su 0
-		viewProjectionSetWrite.dstArrayElement = 0;										// Se avessimo un array questo
-		viewProjectionSetWrite.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;		// Indice nell'array da aggiornare
-		viewProjectionSetWrite.descriptorCount = 1;										// Numero di descriptor da aggiornare
-		viewProjectionSetWrite.pBufferInfo	   = &viewProjectionBufferInfo;				// Informazioni a riguardo dei dati del buffer da bindare
-	
-		// MODEL DESCRIPTOR
+		VkWriteDescriptorSet vpSetWrite = {}; // DescriptorSet per m_uboViewProjection
+		vpSetWrite.sType		   = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		vpSetWrite.dstSet		   = m_descriptorSets[i];
+		vpSetWrite.dstBinding	   = 0;									// Vogliamo aggiornare quello che binda su 0
+		vpSetWrite.dstArrayElement = 0;									// Se avessimo un array questo
+		vpSetWrite.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;	// Indice nell'array da aggiornare
+		vpSetWrite.descriptorCount = 1;									// Numero di descriptor da aggiornare
+		vpSetWrite.pBufferInfo	   = &vpBufferInfo;						// Informazioni a riguardo dei dati del buffer da bindare
+/*
+		// MODEL DESCRIPTOR (DYNAMIC UBO)
 		// Model Buffer Binding Info
 		VkDescriptorBufferInfo modelBufferInfo = {};
 		modelBufferInfo.buffer = m_modelDynamicUBO[i];
@@ -1511,8 +1528,8 @@ void VulkanRenderer::createDescriptorSets()
 		modelSetWrite.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC; // Indice nell'array da aggiornare
 		modelSetWrite.descriptorCount = 1;										   // Numero di descriptor da aggiornare
 		modelSetWrite.pBufferInfo	  = &modelBufferInfo;						   // Informazioni a riguardo dei dati del buffer da bindare
-
-		std::vector<VkWriteDescriptorSet> setWrites = { viewProjectionSetWrite , modelSetWrite };
+		*/
+		std::vector<VkWriteDescriptorSet> setWrites = { vpSetWrite };
 
 		// Aggiornamento dei descriptor sets con i nuovi dati del buffer/binding
 		vkUpdateDescriptorSets(m_mainDevice.logicalDevice, static_cast<uint32_t>(setWrites.size()), setWrites.data(), 0, nullptr);
@@ -1531,19 +1548,19 @@ void VulkanRenderer::updateUniformBuffers(uint32_t imageIndex)
 	memcpy(data, &m_UboViewProjection, sizeof(UboViewProjection));
 	vkUnmapMemory(m_mainDevice.logicalDevice, m_viewProjectionUniformBufferMemory[imageIndex]);
 
-	/* Copia delle Model matrix nei blocchi di memoria allineati */
-	for(size_t i = 0; i < m_meshList.size(); i++)
+	/* Copia delle Model matrix nei blocchi di memoria allineati (DYNAMIC UNIFORM BUFFER) */
+	/*for(size_t i = 0; i < m_meshList.size(); i++)
 	{
-		UboModel* thisModel = (UboModel*)((uint64_t)m_modelTransferSpace + (i * m_modelUniformAlignment));
+		Model* thisModel = (Model*)((uint64_t)m_modelTransferSpace + (i * m_modelUniformAlignment));
 		*thisModel = m_meshList[i].getModel();
-	}
+	}*/
 
 	// Mappa l'UniformBufferObject nello spazio di indirizzamento dell'applicazione, salvando nel puntatore 'data' l'intervallo mappato sulla memoria.
-	vkMapMemory(m_mainDevice.logicalDevice,
+	/*vkMapMemory(m_mainDevice.logicalDevice,
 		m_modelDynamicUniformBufferMemory[imageIndex], 0,
 		m_modelUniformAlignment * m_meshList.size(), 0, &data);
 	memcpy(data, m_modelTransferSpace, m_modelUniformAlignment * m_meshList.size());
-	vkUnmapMemory(m_mainDevice.logicalDevice, m_modelDynamicUniformBufferMemory[imageIndex]);
+	vkUnmapMemory(m_mainDevice.logicalDevice, m_modelDynamicUniformBufferMemory[imageIndex]);*/
 }
 
 // Costruzione di uno Shader Module a partire dal codice intermedio SPIR-V
@@ -1579,8 +1596,8 @@ void VulkanRenderer::cleanup()
 	// quindi è corretto aspettare che il dispositivo sia inattivo prima di eliminare gli oggetti.
 	vkDeviceWaitIdle(m_mainDevice.logicalDevice);
 
-	// Libero la memoria allineata per la Model
-	_aligned_free(m_modelTransferSpace);
+	// Libero la memoria allineata per la Model (DYNAMIC UBO)
+	//_aligned_free(m_modelTransferSpace);
 
 	// Distrugge della Pool di DescriptorSet
 	vkDestroyDescriptorPool(m_mainDevice.logicalDevice, m_descriptorPool, nullptr);
@@ -1588,7 +1605,8 @@ void VulkanRenderer::cleanup()
 	// Distrugge del layout del DescriptorSet
 	vkDestroyDescriptorSetLayout(m_mainDevice.logicalDevice, m_descriptorSetLayout, nullptr);
 
-	// Distrugge i buffers per i DescriptorSet
+	// Distrugge i buffers per i DescriptorSet (Dynamic UBO)
+	/*
 	for (size_t i = 0; i < m_swapChainImages.size(); i++)
 	{
 		vkDestroyBuffer(m_mainDevice.logicalDevice, m_viewProjectionUBO[i], nullptr);
@@ -1596,7 +1614,7 @@ void VulkanRenderer::cleanup()
 		
 		vkDestroyBuffer(m_mainDevice.logicalDevice, m_modelDynamicUBO[i], nullptr);
 		vkFreeMemory(m_mainDevice.logicalDevice, m_modelDynamicUniformBufferMemory[i], nullptr);
-	}
+	}*/
 
 	// Distrugge le Meshes
 	for (size_t i = 0; i < m_meshList.size(); i++)

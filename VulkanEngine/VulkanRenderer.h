@@ -75,7 +75,7 @@ private:
 	
 	VkDeviceSize m_minUniformBufferOffset;
 	size_t		 m_modelUniformAlignment;
-	UboModel*	 m_modelTransferSpace;
+	Model*	 m_modelTransferSpace;
 
 	/* Pipeline */
 	VkPipeline		 m_graphicsPipeline;
@@ -96,6 +96,8 @@ private:
 
 	std::vector<VkBuffer>		 m_modelDynamicUBO;		// Uniform Buffer per caricare i dati sulla GPU
 	std::vector<VkDeviceMemory>  m_modelDynamicUniformBufferMemory; // Memoria effettivamente allocata sulla GPU per il Descriptor Set
+
+	VkPushConstantRange			 m_pushCostantRange;
 
 	/* Semafori */
 	struct SubmissionSyncObjects {
@@ -136,7 +138,7 @@ private:
 	void createCommandBuffers();
 	void createSynchronisation();
 	void createDescriptorSetLayout();
-
+	void createPushCostantRange();
 	void createUniformBuffers();
 	void createDescriptorPool();
 	void createDescriptorSets();
@@ -144,7 +146,7 @@ private:
 	void updateUniformBuffers(uint32_t imageIndex);
 
 	/* Funzioni di registrazione */
-	void recordCommands();
+	void recordCommands(uint32_t currentImage);
 
 	/* Funzioni di allocazione */
 	void allocateDynamicBufferTransferSpace();

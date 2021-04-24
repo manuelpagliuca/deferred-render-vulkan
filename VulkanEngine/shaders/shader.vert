@@ -8,14 +8,20 @@ layout(set = 0, binding = 0) uniform UboViewProjection {
 	mat4 view;
 } uboViewProjection;
 
-layout(set = 0, binding = 1) uniform UboModel {
+// NOT IN USE, LEFT FOR REFERENCE (UBO NOT EFFICIENT AS PUSH COSTANT)
+//layout(set = 0, binding = 1) uniform UboModel {
+//	mat4 model;
+//} uboModel;
+
+// You can have only one PushCostant per Shader
+layout(push_constant) uniform PushModel{
 	mat4 model;
-} uboModel;
+} pushModel;
 
 layout(location = 0) out vec3 fragCol;
 
 void main() {
-	gl_Position = uboViewProjection.projection * uboViewProjection.view * uboModel.model * vec4(pos, 1.0);
+	gl_Position = uboViewProjection.projection * uboViewProjection.view * pushModel.model * vec4(pos, 1.0);
 	
 	fragCol = col;
 }
