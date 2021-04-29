@@ -65,6 +65,12 @@ private:
 	std::vector<SwapChainImage> m_swapChainImages;		 // Vettore contenente le Image e ImageView della SwapChain
 	std::vector<VkFramebuffer>  m_swapChainFrameBuffers; //
 
+	VkImage			m_depthBufferImage;			// Non c'è necessità di un vettore, questa immagine non viene utilizzata dopo la pipeline, serve solo per un compito poi ritornerà disponibile per disegnarci
+	VkFormat		m_depthFormat;
+	VkDeviceMemory  m_depthBufferImageMemory;
+	VkImageView		m_depthBufferImageView;
+
+
 	/* Queues */
 	VkQueue	m_graphicsQueue;							
 	VkQueue	m_presentationQueue;						
@@ -133,6 +139,7 @@ private:
 	void createSwapChain();
 	void createGraphicPipeline();
 	void createRenderPass();
+	void createDepthBufferImage();
 	void createFramebuffers();
 	void createCommandPool();
 	void createCommandBuffers();
@@ -158,6 +165,7 @@ private:
 	bool checkDeviceExtensionSupport(VkPhysicalDevice device);					  // Controllo se il dispositivo fisico supporta le estensioni specificate in 'deviceExtensions' (Utilities.h)
 
 	/* Funzioni ausiliarie */
+	VkImage createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags useFlags, VkMemoryPropertyFlags propFlags, VkDeviceMemory *imageMemory);
 	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspetFlags);
 	VkShaderModule createShaderModule(const std::vector<char>& code);
 
@@ -165,6 +173,7 @@ private:
 	VkSurfaceFormatKHR chooseBestSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
 	VkPresentModeKHR chooseBestPresentationMode(const std::vector<VkPresentModeKHR>& presentationModes);
 	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& surfaceCapabilities);
+	VkFormat chooseSupportedFormat(const std::vector<VkFormat> &formats, VkImageTiling tiling, VkFormatFeatureFlags featureFlags);
 
 	// Funzioni per il debug
 	void setupDebugMessenger();										// Funzione che imposta il debug messanger

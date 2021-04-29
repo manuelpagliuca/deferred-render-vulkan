@@ -1,3 +1,5 @@
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+
 #define GLFW_INCLUDE_VULKAN
 
 #include <GLFW/glfw3.h>
@@ -8,7 +10,7 @@
 
 #include "VulkanRenderer.h"
 
-VulkanRenderer* vulkanRenderer = new VulkanRenderer();
+VulkanRenderer *vulkanRenderer = new VulkanRenderer();
 GLFWwindow* window			   = nullptr;
 
 // Creazione della finestra GLFW
@@ -45,27 +47,24 @@ int main()
 	{
 		glfwPollEvents();
 
-		float const now = glfwGetTime();
+		float now = glfwGetTime();
 		deltaTime = now - lastTime;
-		lastTime  = now;
-		angle += 10.f * deltaTime;
+		lastTime = now;
 
-		if (angle > 360.f)
-		{
-			angle -= 360.f;
-		}
+		angle += 10.0f * deltaTime;
+		if (angle > 360.0f) { angle -= 360.0f; }
 
 		glm::mat4 firstModel(1.0f);
 		glm::mat4 secondModel(1.0f);
 
-		firstModel = glm::translate(firstModel, glm::vec3(-2.0f, 0.0f, -5.0f));
+		firstModel = glm::translate(firstModel, glm::vec3(0.0f, 0.0f, -2.5f));
 		firstModel = glm::rotate(firstModel, glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f));
-		
-		secondModel = glm::translate(secondModel, glm::vec3(2.0f, 0.0f, -5.0f));
-		secondModel = glm::rotate(secondModel, glm::radians(-angle * 100), glm::vec3(0.0f, 0.0f, 1.0f));
+
+		secondModel = glm::translate(secondModel, glm::vec3(0.0f, 0.0f, -3.0f));
+		secondModel = glm::rotate(secondModel, glm::radians(-angle * 10), glm::vec3(0.0f, 0.0f, 1.0f));
 
 		vulkanRenderer->updateModel(0, firstModel);
-		vulkanRenderer->updateModel(1, firstModel);
+		vulkanRenderer->updateModel(1, secondModel);
 
 		vulkanRenderer->draw();
 	}
