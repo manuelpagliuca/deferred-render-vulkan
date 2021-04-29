@@ -7,7 +7,6 @@
 #include <stdexcept>
 #include <vector>
 #include <iostream>
-
 #include "VulkanRenderer.h"
 
 VulkanRenderer *vulkanRenderer = new VulkanRenderer();
