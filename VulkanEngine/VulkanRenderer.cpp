@@ -57,7 +57,7 @@ int VulkanRenderer::init(void* t_window)
 											static_cast<float>(m_swapChainExtent.width) / static_cast<float>(m_swapChainExtent.height),
 											0.1f, 100.f);
 
-		m_UboViewProjection.view = glm::lookAt(glm::vec3(3.f, 1.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.0f, 0.f));
+		m_UboViewProjection.view = glm::lookAt(glm::vec3(0.f, 0.f, 3.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.0f, 0.f));
 		
 		// GLM threat Y-AXIS as Up-Axis, but in Vulkan the Y is down.
 		m_UboViewProjection.projection[1][1] *= -1;
