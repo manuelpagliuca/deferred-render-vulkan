@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <array>
 
+#include "stb_image.h"
+
 #include "Mesh.h"
 #include "Utilities.h"
 
@@ -70,7 +72,6 @@ private:
 	VkDeviceMemory  m_depthBufferImageMemory;
 	VkImageView		m_depthBufferImageView;
 
-
 	/* Queues */
 	VkQueue	m_graphicsQueue;							
 	VkQueue	m_presentationQueue;						
@@ -83,6 +84,13 @@ private:
 	size_t		 m_modelUniformAlignment;
 	Model*	 m_modelTransferSpace;
 
+	VkSampler m_textureSampler;
+
+	/* Assets */
+	std::vector<VkImage> m_textureImages;
+	std::vector<VkDeviceMemory> m_textureImageMemory;
+	std::vector<VkImageView> m_textureImageViews;
+
 	/* Pipeline */
 	VkPipeline		 m_graphicsPipeline;
 	VkPipelineLayout m_pipelineLayout;
@@ -93,9 +101,13 @@ private:
 	std::vector<VkCommandBuffer> m_commandBuffer;
 
 	/* Descriptors */
-	VkDescriptorSetLayout		 m_descriptorSetLayout; // Descrive i dati prima di passarli a gli Shaders
-	VkDescriptorPool			 m_descriptorPool;		// Utilizzato per allocare i Descriptor Sets
+	VkDescriptorSetLayout		 m_descriptorSetLayout;   // Descrive i dati prima di passarli a gli Shaders
+	VkDescriptorSetLayout		 m_samplerSetLayout;
+	VkDescriptorPool			 m_descriptorPool;		  // Utilizzato per allocare i Descriptor Sets
+	VkDescriptorPool			 m_samplerDescriptorPool;
+
 	std::vector<VkDescriptorSet> m_descriptorSets;		// Vettore di Descriptor Set
+	std::vector<VkDescriptorSet> m_samplerDescriptorSets;
 
 	std::vector<VkBuffer>		 m_viewProjectionUBO;		  // Uniform Buffer per caricare i dati sulla GPU
 	std::vector<VkDeviceMemory>  m_viewProjectionUniformBufferMemory; // Memoria effettivamente allocata sulla GPU per il Descriptor Set
@@ -143,6 +155,7 @@ private:
 	void createFramebuffers();
 	void createCommandPool();
 	void createCommandBuffers();
+	void createTextureSampler();
 	void createSynchronisation();
 	void createDescriptorSetLayout();
 	void createPushCostantRange();
@@ -168,6 +181,9 @@ private:
 	VkImage createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags useFlags, VkMemoryPropertyFlags propFlags, VkDeviceMemory *imageMemory);
 	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspetFlags);
 	VkShaderModule createShaderModule(const std::vector<char>& code);
+	int createTexture(std::string fileName);
+	int createTextureImage(std::string fileName);
+	int createTextureDescriptor(VkImageView textureImage);
 
 	/* Funzioni di scelta */
 	VkSurfaceFormatKHR chooseBestSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
@@ -178,6 +194,9 @@ private:
 	// Funzioni per il debug
 	void setupDebugMessenger();										// Funzione che imposta il debug messanger
 	
+	/* Loader Functions */
+	stbi_uc* loadTextureFile(std::string fileName, int* width, int* height, VkDeviceSize* imageSize);
+
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(			// Funzione callback
 		VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 		VkDebugUtilsMessageTypeFlagsEXT messageType,

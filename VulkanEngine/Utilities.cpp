@@ -1,5 +1,10 @@
 #include "Utilities.h"
 
+
+#include "stb_image.h"
+#define STB_IMAGE_IMPLEMENTATION
+
+
 // Legge un file
 std::vector<char> readFile(const std::string& filename)
 {
@@ -65,6 +70,8 @@ void createBuffer(VkPhysicalDevice physicalDevice, VkDevice device,
 	vkBindBufferMemory(device, *buffer, *bufferMemory, 0);
 }
 
+
+
 // Restituisce l'indice per il tipo di memoria desiderato, a partire dal tipo definito dal requisito di memoria
 // supportedMemoryTypes : Requisiti di memoria del buffer
 // properties			: Proprietà della memoria (come la visibilità/accesso del buffer)
@@ -98,21 +105,18 @@ uint32_t findMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t supported
 	}
 }
 
-// Copia dei dati di un buffer in un altro attraverso dei CommandBuffer (quindi l'operazione è eseguita dalla GPU)
-void copyBuffer(VkDevice logicalDevice, VkQueue transferQueue,
-				VkCommandPool transferCommandPool, VkBuffer srcBuffer,
-				VkBuffer dstBuffer, VkDeviceSize bufferSize)
+VkCommandBuffer beginCommandBuffer(VkDevice device, VkCommandPool commandPool)
 {
-	VkCommandBuffer transferCommandBuffer;
+	VkCommandBuffer commandBuffer;
 
 	VkCommandBufferAllocateInfo allocInfo = {};
-	allocInfo.sType				 = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level				 = VK_COMMAND_BUFFER_LEVEL_PRIMARY; 
-	allocInfo.commandPool		 = transferCommandPool;				
-	allocInfo.commandBufferCount = 1;								
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandPool = commandPool;
+	allocInfo.commandBufferCount = 1;
 
 	// Alloca il CommandBuffer dalla pool
-	vkAllocateCommandBuffers(logicalDevice, &allocInfo, &transferCommandBuffer);
+	vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
 
 	// Informazioni per iniziare la registrazione del Command Buffer
 	VkCommandBufferBeginInfo beginInfo = {};
@@ -120,30 +124,116 @@ void copyBuffer(VkDevice logicalDevice, VkQueue transferQueue,
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // Ogni comando registrato nel Command Buffer verrà inviato soltanto una volta
 
 	// Inizia la registrazione del comando di trasferimento
-	vkBeginCommandBuffer(transferCommandBuffer, &beginInfo);
+	vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
-		// Regione dei dati sorgente (da cui voglio copiare)
-		VkBufferCopy bufferCopyRegion = {};
-		bufferCopyRegion.srcOffset = 0;
-		bufferCopyRegion.dstOffset = 0;
-		bufferCopyRegion.size	   = bufferSize;
+	return commandBuffer;
+}
 
-		// Comando per copiare il srcBuffer nel dstBuffer
-		vkCmdCopyBuffer(transferCommandBuffer, srcBuffer, dstBuffer, 1, &bufferCopyRegion);
-
+void endAndSubmitCommandBuffer(VkDevice device, VkCommandPool commandPool, VkQueue queue, VkCommandBuffer commandBuffer)
+{
 	// Termina la registrazione del comando nel CommandBuffer
-	vkEndCommandBuffer(transferCommandBuffer);
+	vkEndCommandBuffer(commandBuffer);
 
 	// Informazioni per effettuare la submit del CommandBuffer alla Queue
 	VkSubmitInfo submitInfo = {};
-	submitInfo.sType			  = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers	  = &transferCommandBuffer;
+	submitInfo.pCommandBuffers = &commandBuffer;
 
 	// Invia li comando di copia alla Transfer Queue (nel nostro caso sarà la Graphics Queue) ed aspetta finchè termini
-	vkQueueSubmit(transferQueue, 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(transferQueue);
+	vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(queue);
 
 	// Libera il CommandBuffer
-	vkFreeCommandBuffers(logicalDevice, transferCommandPool, 1, &transferCommandBuffer);
+	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+}
+
+// Copia dei dati di un buffer in un altro attraverso dei CommandBuffer (quindi l'operazione è eseguita dalla GPU)
+void copyBuffer(VkDevice device, VkQueue transferQueue,
+				VkCommandPool transferCommandPool, VkBuffer srcBuffer,
+				VkBuffer dstBuffer, VkDeviceSize bufferSize)
+{
+	VkCommandBuffer transferCommandBuffer = beginCommandBuffer(device, transferCommandPool);
+
+	// Regione dei dati sorgente (da cui voglio copiare)
+	VkBufferCopy bufferCopyRegion = {};
+	bufferCopyRegion.srcOffset = 0;
+	bufferCopyRegion.dstOffset = 0;
+	bufferCopyRegion.size	   = bufferSize;
+
+	// Comando per copiare il srcBuffer nel dstBuffer
+	vkCmdCopyBuffer(transferCommandBuffer, srcBuffer, dstBuffer, 1, &bufferCopyRegion);
+
+	endAndSubmitCommandBuffer(device, transferCommandPool, transferQueue, transferCommandBuffer);
+}
+
+void copyImageBuffer(VkDevice device, VkQueue transferQueue, VkCommandPool transferCommandPool, VkBuffer src, VkImage image, uint32_t width, uint32_t height)
+{
+	VkCommandBuffer transferCommandBuffer = beginCommandBuffer(device, transferCommandPool);
+
+	VkBufferImageCopy imageRegion = {};
+	imageRegion.bufferOffset					= 0;
+	imageRegion.bufferRowLength					= 0;
+	imageRegion.bufferImageHeight				= 0;
+	imageRegion.imageSubresource.aspectMask		= VK_IMAGE_ASPECT_COLOR_BIT;
+	imageRegion.imageSubresource.mipLevel		= 0;
+	imageRegion.imageSubresource.baseArrayLayer = 0;
+	imageRegion.imageSubresource.layerCount		= 1;
+	imageRegion.imageOffset = { 0, 0, 0 };
+	imageRegion.imageExtent = { width, height, 1 };
+
+	vkCmdCopyBufferToImage(transferCommandBuffer, src, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageRegion);
+
+	endAndSubmitCommandBuffer(device, transferCommandPool, transferQueue, transferCommandBuffer);
+}
+
+void transitionImageLayout(VkDevice device, VkQueue queue, VkCommandPool commandPool, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout)
+{
+	VkCommandBuffer commandBuffer = beginCommandBuffer(device, commandPool);
+
+	VkImageMemoryBarrier imageMemoryBarrier = {};
+	imageMemoryBarrier.sType							  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	imageMemoryBarrier.oldLayout						  = oldLayout;					// Layout da cui spostarsi
+	imageMemoryBarrier.newLayout						  = newLayout;					// Layout in cui spostarsi
+	imageMemoryBarrier.srcQueueFamilyIndex			  = VK_QUEUE_FAMILY_IGNORED;	// Queue family da cui spostarsi
+	imageMemoryBarrier.dstQueueFamilyIndex			  = VK_QUEUE_FAMILY_IGNORED;	// Queue family in cui spostarsi
+	imageMemoryBarrier.image							  = image;						// Immagine che viene acceduta e modificata come parte della barriera
+	imageMemoryBarrier.subresourceRange.aspectMask	  = VK_IMAGE_ASPECT_COLOR_BIT;
+	imageMemoryBarrier.subresourceRange.baseMipLevel	  = 0;
+	imageMemoryBarrier.subresourceRange.levelCount	  = 1;
+	imageMemoryBarrier.subresourceRange.baseArrayLayer = 0;
+	imageMemoryBarrier.subresourceRange.layerCount	  = 1;
+
+	VkPipelineStageFlags srcStage;
+	VkPipelineStageFlags dstStage;
+
+
+	
+	// Se si sta transizionando da una nuova immagine ad un immagine pronta per ricevere i dati...
+	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+	{
+		imageMemoryBarrier.srcAccessMask = 0;							// Qualsiasi stage iniziale
+		imageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;	// Questo è lo stage che viene eseguito nel momento che lo stage nel 'srcAccessMask' viene completato
+
+		srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;	// qualsiasi momento dopo l'inizio della pipeline
+		dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;		// Primache provi a fare una write nel transfer stage!
+	}
+	else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+	{
+		imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;			// al termine delle operazioni di scrittura del transfer stage
+		dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;	// prima che provi a a leggere il fragment shader
+	}
+
+	vkCmdPipelineBarrier(commandBuffer,
+		srcStage, dstStage,  // Pipeline stages sono connessi ai memory access (srcAccessMAsk ...)
+		0,	   // Dependencey flag
+		0, nullptr,	// Memory Barrier count + data
+		0, nullptr,	// Buffer memory barrier + data
+		1, &imageMemoryBarrier// ImageMemoryBarrier  count + data
+	);
+
+	endAndSubmitCommandBuffer(device, commandPool, queue, commandBuffer);
 }
