@@ -1,18 +1,7 @@
-#define STB_IMAGE_IMPLEMENTATION
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#define GLFW_INCLUDE_VULKAN
+#include "pch.h"
 
-#include <GLFW/glfw3.h>
-
-#include <stdexcept>
-#include <vector>
-#include <iostream>
 #include "VulkanRenderer.h"
 
-VulkanRenderer *vulkanRenderer = new VulkanRenderer();
-GLFWwindow* window			   = nullptr;
-
-// Creazione della finestra GLFW
 void initWindow(GLFWwindow** t_window, std::string wName = "Test Window", const int width = 800, const int height = 600)
 {
 	int res = glfwInit();
@@ -29,8 +18,11 @@ void initWindow(GLFWwindow** t_window, std::string wName = "Test Window", const 
 	*t_window = glfwCreateWindow(width, height, wName.c_str(), nullptr, nullptr);	// Carico sul puntatore creato
 }
 
-int main()
+int main(void)
 {
+	VulkanRenderer* vulkanRenderer = new VulkanRenderer();
+	GLFWwindow* window = nullptr;
+
 	initWindow(&window, "Test Vulkan 13/03/2021", 1024, 720); // Inizializzazione di una finestra GLFW
 
 	if (vulkanRenderer->init(window) == EXIT_FAILURE)		  // Creazione e controllo del VulkanRenderer

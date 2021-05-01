@@ -1,3 +1,5 @@
+#include "pch.h"
+
 #include "Mesh.h"
 
 // Crea la mesh partendo da "Vertex Data" e "Index Data"
@@ -9,8 +11,8 @@ Mesh::Mesh(VkPhysicalDevice newPhysicalDevice,
 		   std::vector<uint32_t>* indices,
 			int newTexID)
 {
-	m_vertexCount    = vertices->size();
-	m_indexCount	 = indices->size();
+	m_vertexCount    = static_cast<int>(vertices->size());
+	m_indexCount	 = static_cast<int>(indices->size());
 	m_physicalDevice = newPhysicalDevice;
 	m_logicalDevice  = newLogicalDevice;
 
