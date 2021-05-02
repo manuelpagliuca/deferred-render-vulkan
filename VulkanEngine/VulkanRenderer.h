@@ -7,6 +7,8 @@
 #include "DebugMessanger.h"
 
 #include "SwapChainHandler.h"
+#include "RenderPassHandler.h"
+#include "GraphicPipeline.h"
 
 class VulkanRenderer
 {
@@ -14,7 +16,7 @@ public:
 	VulkanRenderer();
 	~VulkanRenderer();
 
-	int init(void* newWindow);
+	int Init(void* newWindow);
 
 	void updateModel(int modelID, glm::mat4 newModel);
 
@@ -23,7 +25,7 @@ public:
 
 private:
 	GLFWwindow* m_Window = nullptr;
-	int m_currentFrame   = 0;	    
+	int m_CurrentFrame   = 0;	    
 
 	const std::vector<const char*> m_requestedDeviceExtensions =
 	{
@@ -35,9 +37,10 @@ private:
 	MainDevice		 m_MainDevice;
 	VkSurfaceKHR	 m_Surface;	
 
-	SwapChainHandler m_SwapChainHandler;
-
-	TextureObjects	 m_TextureObjects;
+	SwapChainHandler  m_SwapChainHandler;
+	TextureObjects	  m_TextureObjects;
+	RenderPassHandler m_RenderPassHandler;
+	GraphicPipeline   m_GraphicPipeline;
 
 	/* Struct indici delle Queue Families */
 	/* Queues */
@@ -56,13 +59,7 @@ private:
 		
 	VkDeviceSize m_minUniformBufferOffset;
 	size_t		 m_modelUniformAlignment;
-	Model*	 m_modelTransferSpace;
-
-
-	/* Pipeline */
-	VkPipeline		 m_graphicsPipeline;
-	VkPipelineLayout m_pipelineLayout;
-	VkRenderPass	 m_renderPass;
+	Model*		 m_modelTransferSpace;
 
 	/* Command Pools */
 	VkCommandPool m_graphicsComandPool;
@@ -84,7 +81,7 @@ private:
 	VkPushConstantRange			 m_pushCostantRange;
 
 	// Oggetti per la sincronizzazione
-	std::vector<SubmissionSyncObjects> m_syncObjects;
+	std::vector<SubmissionSyncObjects> m_SyncObjects;
 public:
 	// Scene Objects
 	std::vector<Mesh> m_meshList;
@@ -105,8 +102,6 @@ public:
 	void CreateLogicalDevice();	
 	void CreateSurface();
 
-	void createGraphicPipeline();
-	void createRenderPass();
 	void createDepthBufferImage();
 	void createFramebuffers();
 	void createCommandPool();
@@ -136,5 +131,5 @@ public:
 	/* Funzioni ausiliarie */
 
 	/* Funzioni di scelta */
-	VkFormat chooseSupportedFormat(const std::vector<VkFormat> &formats, VkImageTiling tiling, VkFormatFeatureFlags featureFlags);
+	//VkFormat chooseSupportedFormat(const std::vector<VkFormat> &formats, VkImageTiling tiling, VkFormatFeatureFlags featureFlags);
 };

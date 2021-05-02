@@ -2,7 +2,7 @@
 
 struct MainDevice {
 	VkPhysicalDevice PhysicalDevice;
-	VkDevice LogicalDevice;
+	VkDevice		 LogicalDevice;
 };
 
 struct TextureObjects {
@@ -18,20 +18,20 @@ struct TextureObjects {
 };
 
 struct SubmissionSyncObjects {
-	VkSemaphore imageAvailable; // Avvisa quanto l'immagine è disponibile
-	VkSemaphore renderFinished; // Avvisa quando il rendering è terminato
-	VkFence inFlight;			  // Fence per il frame in esecuzione
+	VkSemaphore ImageAvailable; // Avvisa quanto l'immagine è disponibile
+	VkSemaphore RenderFinished; // Avvisa quando il rendering è terminato
+	VkFence		InFlight;			  // Fence per il frame in esecuzione
 };
 
 // Indici delle Queue Families presenti nel device fisico
 struct QueueFamilyIndices {
 
-	int graphicsFamily = -1;
-	int presentationFamily = -1;
+	int GraphicsFamily	   = -1;
+	int PresentationFamily = -1;
 
 	bool isValid()
 	{
-		return graphicsFamily >= 0 && presentationFamily >= 0;
+		return GraphicsFamily >= 0 && PresentationFamily >= 0;
 	}
 };
 

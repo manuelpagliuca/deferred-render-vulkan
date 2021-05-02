@@ -157,11 +157,11 @@ void SwapChainHandler::CreateSwapChain(QueueFamilyIndices &t_QueueFamilyIndices)
 
 	// Se le famiglie Graphics e Presentation sono diverse, allora la SwapChain deve trattare le immagini
 	// in maniera condivisa e concorrente tra le due queues (non è la modalità più efficente).
-	if (t_QueueFamilyIndices.graphicsFamily != t_QueueFamilyIndices.presentationFamily)
+	if (t_QueueFamilyIndices.GraphicsFamily != t_QueueFamilyIndices.PresentationFamily)
 	{
 		uint32_t queueFamilyIndices[]{
-			static_cast<uint32_t>(t_QueueFamilyIndices.graphicsFamily),
-			static_cast<uint32_t>(t_QueueFamilyIndices.presentationFamily)
+			static_cast<uint32_t>(t_QueueFamilyIndices.GraphicsFamily),
+			static_cast<uint32_t>(t_QueueFamilyIndices.PresentationFamily)
 		};
 
 		swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;	// Modalità concorrente e condivisa

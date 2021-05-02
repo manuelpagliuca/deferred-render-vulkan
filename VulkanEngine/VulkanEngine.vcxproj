@@ -87,6 +87,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="DebugMessanger.cpp" />
+    <ClCompile Include="GraphicPipeline.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="pch.cpp">
@@ -94,6 +95,7 @@
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       </PrecompiledHeaderFile>
     </ClCompile>
+    <ClCompile Include="RenderPassHandler.cpp" />
     <ClCompile Include="SwapChainHandler.cpp" />
     <ClCompile Include="Utilities.cpp" />
     <ClCompile Include="VulkanRenderer.cpp" />
@@ -101,8 +103,10 @@
   <ItemGroup>
     <ClInclude Include="DataStructures.h" />
     <ClInclude Include="DebugMessanger.h" />
+    <ClInclude Include="GraphicPipeline.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Mesh.h" />
+    <ClInclude Include="RenderPassHandler.h" />
     <ClInclude Include="SwapChainHandler.h" />
     <ClInclude Include="Utilities.h" />
     <ClInclude Include="VulkanRenderer.h" />

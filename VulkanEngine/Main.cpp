@@ -25,7 +25,7 @@ int main(void)
 
 	initWindow(&window, "Test Vulkan 13/03/2021", 1024, 720); // Inizializzazione di una finestra GLFW
 
-	if (vulkanRenderer->init(window) == EXIT_FAILURE)		  // Creazione e controllo del VulkanRenderer
+	if (vulkanRenderer->Init(window) == EXIT_FAILURE)		  // Creazione e controllo del VulkanRenderer
 	{
 		return EXIT_FAILURE;
 	}

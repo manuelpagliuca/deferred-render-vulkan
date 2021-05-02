@@ -3,7 +3,8 @@
 #include "Utilities.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
-std::vector<char> ReadFile(const std::string& filename)
+
+std::vector<char> Utility::ReadFile(const std::string& filename)
 {
 	// Apre lo stream dal file fornito, come binario e partendo dal fondo
 	std::ifstream file(filename, std::ios::binary | std::ios::ate);
@@ -21,11 +22,8 @@ std::vector<char> ReadFile(const std::string& filename)
 	return fileBuffer;
 }
 
-// Crea un buffer sulla GPU
-void createBuffer(VkPhysicalDevice physicalDevice, VkDevice device,
-	VkDeviceSize bufferSize, VkBufferUsageFlags bufferUsage,
-	VkMemoryAllocateFlags bufferProperties,
-	VkBuffer* buffer, VkDeviceMemory* bufferMemory)
+void Utility::CreateBuffer(MainDevice &mainDevice, VkDeviceSize bufferSize, VkBufferUsageFlags bufferUsage,
+	VkMemoryAllocateFlags bufferProperties,	VkBuffer* buffer, VkDeviceMemory* bufferMemory)
 {
 	VkBufferCreateInfo bufferInfo = {};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -33,7 +31,7 @@ void createBuffer(VkPhysicalDevice physicalDevice, VkDevice device,
 	bufferInfo.usage	   = bufferUsage;				// Utilizzo del buffer (VertexBuffer, IndexBuffer, UniformBuffer, ...)
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;	// Accesso alle immagini esclusivo alla Queue Family
 
-	VkResult result = vkCreateBuffer(device, &bufferInfo, nullptr, buffer);
+	VkResult result = vkCreateBuffer(mainDevice.LogicalDevice, &bufferInfo, nullptr, buffer);
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Vertex Buffer!");
@@ -41,22 +39,19 @@ void createBuffer(VkPhysicalDevice physicalDevice, VkDevice device,
 
 	// Query per i requisiti di memoria del buffer
 	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(device, *buffer, &memRequirements);
+	vkGetBufferMemoryRequirements(mainDevice.LogicalDevice, *buffer, &memRequirements);
 
 	// Informazioni per l'allocazione della memoria del buffer
 	VkMemoryAllocateInfo memoryAllocInfo = {};
 	memoryAllocInfo.sType		    = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memoryAllocInfo.allocationSize  = memRequirements.size;					// Dimensione dell'allocazione = Memoria richiesta per il buffer
-	memoryAllocInfo.memoryTypeIndex = findMemoryTypeIndex(					// Indice del tipo di memoria da utilizzare
-										physicalDevice,
-										memRequirements.memoryTypeBits, 
-										bufferProperties);		
+	memoryAllocInfo.memoryTypeIndex = Utility::FindMemoryTypeIndex(mainDevice.PhysicalDevice, memRequirements.memoryTypeBits, bufferProperties);
 
 	// VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT  : CPU può interagire con la memoria
 	// VK_MEMORY_PROPERTY_HOST_COHERENT_BIT : Permette il posizionamento dei dati direttamente nel buffer dopo il mapping
 	// (altrimenti ha bisogno di essere specificato manualmente)
 
-	result = vkAllocateMemory(device, &memoryAllocInfo, nullptr, bufferMemory);
+	result = vkAllocateMemory(mainDevice.LogicalDevice, &memoryAllocInfo, nullptr, bufferMemory);
 
 	if (result != VK_SUCCESS)
 	{
@@ -64,45 +59,14 @@ void createBuffer(VkPhysicalDevice physicalDevice, VkDevice device,
 	}
 
 	// Allocazione della memoria sul dato buffer
-	vkBindBufferMemory(device, *buffer, *bufferMemory, 0);
+	vkBindBufferMemory(mainDevice.LogicalDevice, *buffer, *bufferMemory, 0);
 }
 
 // Restituisce l'indice per il tipo di memoria desiderato, a partire dal tipo definito dal requisito di memoria
 // supportedMemoryTypes : Requisiti di memoria del buffer
 // properties			: Proprietà della memoria (come la visibilità/accesso del buffer)
-uint32_t findMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t supportedMemoryTypes, VkMemoryPropertyFlags properties)
-{
-	// Query per le proprietà della memoria
-	VkPhysicalDeviceMemoryProperties memoryProperties;
-	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
 
-	// Per ogni tipo di memoria 
-	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
-	{
-		// Itera per ogni tipo di memoria shiftando a sinistra un 1
-		// in questo modo crea delle varie combinazioni di tipologie di memoria.
-		// Se esiste una combinazione di memoria che è supportata e che quindi è contenuta in "supportedMemoryTypes"
-		// questo significa che si prenderà il tipo di memoria che supporta tutti 
-		// i flag possibili (tutti i bit saranno ad 1, quindi con valore 256).
-		auto supportedMemory  = supportedMemoryTypes & (1U << i);
-
-		// Itera per ogni tipo di memoria e fa AND BIT-a-BIT con le proprietà del tipo di memoria.
-		// Se dopo questa operazione, il risultato è uguale all proprietà della memoria fornite.
-		// Allora quella proprietà è supportata dall'i-esimo indice
-		auto supportedProperties = (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties;
-
-		// Se il tipo di memoria è stato trovato assieme alle proprietà durante lo stesso ciclo
-		// significa che il tipo di memoria è valido e ne restituiamo l'indice.
-		if (supportedMemory && supportedProperties)
-		{
-			return i;
-		}
-	}
-
-	return static_cast<uint32_t>(0);
-}
-
-VkCommandBuffer beginCommandBuffer(VkDevice device, VkCommandPool commandPool)
+VkCommandBuffer Utility::BeginCommandBuffer(VkDevice device, VkCommandPool commandPool)
 {
 	VkCommandBuffer commandBuffer;
 
@@ -126,7 +90,7 @@ VkCommandBuffer beginCommandBuffer(VkDevice device, VkCommandPool commandPool)
 	return commandBuffer;
 }
 
-void endAndSubmitCommandBuffer(VkDevice device, VkCommandPool commandPool, VkQueue queue, VkCommandBuffer commandBuffer)
+void Utility::EndAndSubmitCommandBuffer(VkDevice device, VkCommandPool commandPool, VkQueue queue, VkCommandBuffer commandBuffer)
 {
 	// Termina la registrazione del comando nel CommandBuffer
 	vkEndCommandBuffer(commandBuffer);
@@ -146,11 +110,11 @@ void endAndSubmitCommandBuffer(VkDevice device, VkCommandPool commandPool, VkQue
 }
 
 // Copia dei dati di un buffer in un altro attraverso dei CommandBuffer (quindi l'operazione è eseguita dalla GPU)
-void copyBuffer(VkDevice device, VkQueue transferQueue,
-				VkCommandPool transferCommandPool, VkBuffer srcBuffer,
-				VkBuffer dstBuffer, VkDeviceSize bufferSize)
+void Utility::CopyBuffer(VkDevice& logicalDevice, VkQueue& transferQueue,
+	VkCommandPool& transferCommandPool, VkBuffer& srcBuffer,
+	VkBuffer& dstBuffer, VkDeviceSize bufferSize)
 {
-	VkCommandBuffer transferCommandBuffer = beginCommandBuffer(device, transferCommandPool);
+	VkCommandBuffer transferCommandBuffer = BeginCommandBuffer(logicalDevice, transferCommandPool);
 
 	// Regione dei dati sorgente (da cui voglio copiare)
 	VkBufferCopy bufferCopyRegion = {};
@@ -161,12 +125,12 @@ void copyBuffer(VkDevice device, VkQueue transferQueue,
 	// Comando per copiare il srcBuffer nel dstBuffer
 	vkCmdCopyBuffer(transferCommandBuffer, srcBuffer, dstBuffer, 1, &bufferCopyRegion);
 
-	endAndSubmitCommandBuffer(device, transferCommandPool, transferQueue, transferCommandBuffer);
+	EndAndSubmitCommandBuffer(logicalDevice, transferCommandPool, transferQueue, transferCommandBuffer);
 }
 
-void copyImageBuffer(VkDevice device, VkQueue transferQueue, VkCommandPool transferCommandPool, VkBuffer src, VkImage image, uint32_t width, uint32_t height)
+void Utility::CopyImageBuffer(VkDevice &device, VkQueue transferQueue, VkCommandPool transferCommandPool, VkBuffer src, VkImage image, uint32_t width, uint32_t height)
 {
-	VkCommandBuffer transferCommandBuffer = beginCommandBuffer(device, transferCommandPool);
+	VkCommandBuffer transferCommandBuffer = BeginCommandBuffer(device, transferCommandPool);
 
 	VkBufferImageCopy imageRegion = {};
 	imageRegion.bufferOffset					= 0;
@@ -181,12 +145,12 @@ void copyImageBuffer(VkDevice device, VkQueue transferQueue, VkCommandPool trans
 
 	vkCmdCopyBufferToImage(transferCommandBuffer, src, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageRegion);
 
-	endAndSubmitCommandBuffer(device, transferCommandPool, transferQueue, transferCommandBuffer);
+	EndAndSubmitCommandBuffer(device, transferCommandPool, transferQueue, transferCommandBuffer);
 }
 
-void transitionImageLayout(VkDevice device, VkQueue queue, VkCommandPool commandPool, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout)
+void Utility::TransitionImageLayout(VkDevice &device, VkQueue queue, VkCommandPool commandPool, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout)
 {
-	VkCommandBuffer commandBuffer = beginCommandBuffer(device, commandPool);
+	VkCommandBuffer commandBuffer = BeginCommandBuffer(device, commandPool);
 
 	VkImageMemoryBarrier imageMemoryBarrier = {};
 	imageMemoryBarrier.sType							  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -203,8 +167,6 @@ void transitionImageLayout(VkDevice device, VkQueue queue, VkCommandPool command
 
 	VkPipelineStageFlags srcStage = 0;
 	VkPipelineStageFlags dstStage = 0;
-
-
 	
 	// Se si sta transizionando da una nuova immagine ad un immagine pronta per ricevere i dati...
 	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
@@ -232,10 +194,10 @@ void transitionImageLayout(VkDevice device, VkQueue queue, VkCommandPool command
 		1, &imageMemoryBarrier// ImageMemoryBarrier  count + data
 	);
 
-	endAndSubmitCommandBuffer(device, commandPool, queue, commandBuffer);
+	EndAndSubmitCommandBuffer(device, commandPool, queue, commandBuffer);
 }
 
-VkImage Utility::CreateImage(VkPhysicalDevice& physicalDevice, VkDevice& device, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags useFlags, VkMemoryPropertyFlags propFlags, VkDeviceMemory* imageMemory)
+VkImage Utility::CreateImage(MainDevice &mainDevice, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags useFlags, VkMemoryPropertyFlags propFlags, VkDeviceMemory* imageMemory)
 {
 	// CREAZIONE DELL'IMMAGINE (Header dell'immagine, in memoria non è ancora presente)
 	VkImageCreateInfo imageCreateInfo = {};
@@ -254,7 +216,7 @@ VkImage Utility::CreateImage(VkPhysicalDevice& physicalDevice, VkDevice& device,
 	imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 	VkImage image;
-	VkResult result = vkCreateImage(device, &imageCreateInfo, nullptr, &image);
+	VkResult result = vkCreateImage(mainDevice.LogicalDevice, &imageCreateInfo, nullptr, &image);
 
 	if (result != VK_SUCCESS)
 	{
@@ -263,21 +225,21 @@ VkImage Utility::CreateImage(VkPhysicalDevice& physicalDevice, VkDevice& device,
 
 	// CREAZIONE DELLA MEMORIA PER L'IMMAGINE
 	VkMemoryRequirements memoryRequirements;
-	vkGetImageMemoryRequirements(device, image, &memoryRequirements);
+	vkGetImageMemoryRequirements(mainDevice.LogicalDevice, image, &memoryRequirements);
 
 	VkMemoryAllocateInfo memoryAllocInfo = {};
 	memoryAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memoryAllocInfo.allocationSize = memoryRequirements.size;
-	memoryAllocInfo.memoryTypeIndex = findMemoryTypeIndex(physicalDevice, memoryRequirements.memoryTypeBits, propFlags);
+	memoryAllocInfo.memoryTypeIndex = FindMemoryTypeIndex(mainDevice.PhysicalDevice, memoryRequirements.memoryTypeBits, propFlags);
 
-	result = vkAllocateMemory(device, &memoryAllocInfo, nullptr, imageMemory);
+	result = vkAllocateMemory(mainDevice.LogicalDevice, &memoryAllocInfo, nullptr, imageMemory);
 
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to allocate memory for image!");
 	}
 
-	result = vkBindImageMemory(device, image, *imageMemory, 0);
+	result = vkBindImageMemory(mainDevice.LogicalDevice, image, *imageMemory, 0);
 
 	if (result != VK_SUCCESS)
 	{
@@ -315,6 +277,38 @@ VkImageView Utility::CreateImageView(VkDevice& device, VkImage image, VkFormat f
 	}
 
 	return imageView;
+}
+
+uint32_t Utility::FindMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t supportedMemoryTypes, VkMemoryPropertyFlags properties)
+{
+	// Query per le proprietà della memoria
+	VkPhysicalDeviceMemoryProperties memoryProperties;
+	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+
+	// Per ogni tipo di memoria 
+	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
+	{
+		// Itera per ogni tipo di memoria shiftando a sinistra un 1
+		// in questo modo crea delle varie combinazioni di tipologie di memoria.
+		// Se esiste una combinazione di memoria che è supportata e che quindi è contenuta in "supportedMemoryTypes"
+		// questo significa che si prenderà il tipo di memoria che supporta tutti 
+		// i flag possibili (tutti i bit saranno ad 1, quindi con valore 256).
+		auto supportedMemory = supportedMemoryTypes & (1U << i);
+
+		// Itera per ogni tipo di memoria e fa AND BIT-a-BIT con le proprietà del tipo di memoria.
+		// Se dopo questa operazione, il risultato è uguale all proprietà della memoria fornite.
+		// Allora quella proprietà è supportata dall'i-esimo indice
+		auto supportedProperties = (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties;
+
+		// Se il tipo di memoria è stato trovato assieme alle proprietà durante lo stesso ciclo
+		// significa che il tipo di memoria è valido e ne restituiamo l'indice.
+		if (supportedMemory && supportedProperties)
+		{
+			return i;
+		}
+	}
+
+	return static_cast<uint32_t>(0);
 }
 
 VkShaderModule Utility::CreateShaderModule(VkDevice &device, const std::vector<char>& code)
@@ -362,11 +356,7 @@ int Utility::CreateTextureImage(MainDevice& mainDevice, TextureObjects &textureO
 	// staging buffer
 	VkBuffer imageStaginBuffer;
 	VkDeviceMemory imageStagingBufferMemory;
-	createBuffer(
-		mainDevice.PhysicalDevice,
-		mainDevice.LogicalDevice,
-		imageSize,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	CreateBuffer(mainDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		&imageStaginBuffer, &imageStagingBufferMemory);
 
@@ -382,18 +372,16 @@ int Utility::CreateTextureImage(MainDevice& mainDevice, TextureObjects &textureO
 	VkImage texImage;
 	VkDeviceMemory texImageMemory;
 	texImage = Utility::CreateImage(
-		mainDevice.PhysicalDevice, mainDevice.LogicalDevice,
+		mainDevice,
 		width, height,
 		VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
 		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &texImageMemory);
 
 	// Descrive la pipeline barrier che deve rispettare la queue
-	transitionImageLayout(mainDevice.LogicalDevice, graphicsQueue, graphicsCommandPool, texImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-	copyImageBuffer(mainDevice.LogicalDevice, graphicsQueue, graphicsCommandPool, imageStaginBuffer, texImage, width, height);
-
-	transitionImageLayout(mainDevice.LogicalDevice, graphicsQueue, graphicsCommandPool, texImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	TransitionImageLayout(mainDevice.LogicalDevice, graphicsQueue, graphicsCommandPool, texImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	CopyImageBuffer(mainDevice.LogicalDevice, graphicsQueue, graphicsCommandPool, imageStaginBuffer, texImage, width, height);
+	TransitionImageLayout(mainDevice.LogicalDevice, graphicsQueue, graphicsCommandPool, texImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	textureObjects.TextureImages.push_back(texImage);
 	textureObjects.TextureImageMemory.push_back(texImageMemory);
@@ -424,7 +412,6 @@ stbi_uc* Utility::LoadTextureFile(std::string fileName, int* width, int* height,
 
 	return nullptr;
 }
-
 
 int Utility::CreateTextureDescriptor(VkDevice &device, VkImageView textureImage, TextureObjects &textureObjects)
 {
@@ -462,4 +449,24 @@ int Utility::CreateTextureDescriptor(VkDevice &device, VkImageView textureImage,
 	textureObjects.SamplerDescriptorSets.push_back(descriptorSet);
 
 	return static_cast<int>(textureObjects.SamplerDescriptorSets.size()) - 1;
+}
+
+VkFormat Utility::ChooseSupportedFormat(MainDevice &mainDevice, const std::vector<VkFormat>& formats, VkImageTiling tiling, VkFormatFeatureFlags featureFlags)
+{
+	for (VkFormat format : formats)
+	{
+		VkFormatProperties properties;
+		vkGetPhysicalDeviceFormatProperties(mainDevice.PhysicalDevice, format, &properties);
+
+		// In base alle scelte di tiling si sceglie un bitflag differente
+		if (tiling == VK_IMAGE_TILING_LINEAR && (properties.linearTilingFeatures & featureFlags) == featureFlags)
+		{
+			return format;
+		}
+		else if (tiling == VK_IMAGE_TILING_OPTIMAL && (properties.optimalTilingFeatures & featureFlags) == featureFlags)
+		{
+			return format;
+		}
+	}
+	throw std::runtime_error("Failed to find a matching format!");
 }

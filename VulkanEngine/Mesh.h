@@ -16,8 +16,7 @@ class Mesh
 public:
 	Mesh()  = default;
 	~Mesh() = default;
-	Mesh(VkPhysicalDevice newPhysicalDevice,
-		 VkDevice newLogicalDevice, 
+	Mesh(MainDevice &m_MainDevice,
 		 VkQueue transferQueue, 
 		 VkCommandPool transferCommandPool, 
 		 std::vector<Vertex>* vertices,
@@ -38,6 +37,7 @@ public:
 	const void* getData() { return &m_model; }
 
 private:
+	MainDevice		 m_MainDevice;
 	Model m_model;
 	int m_texID;
 
@@ -50,10 +50,6 @@ private:
 	int				 m_indexCount;
 	VkBuffer		 m_indexBuffer;
 	VkDeviceMemory   m_indexBufferMemory;
-
-	/* Devices */
-	VkPhysicalDevice m_physicalDevice;
-	VkDevice		 m_logicalDevice;
 
 private:
 	void createVertexBuffer(VkQueue transferQueue, VkCommandPool transferCommandPool, std::vector<Vertex>* vertices);

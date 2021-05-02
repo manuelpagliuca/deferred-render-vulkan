@@ -1,7 +1,5 @@
 #pragma once
 
-
-
 // Standard Library
 #include <vector>
 #include <array>

@@ -3,8 +3,7 @@
 #include "Mesh.h"
 
 // Crea la mesh partendo da "Vertex Data" e "Index Data"
-Mesh::Mesh(VkPhysicalDevice newPhysicalDevice, 
-		   VkDevice newLogicalDevice, 
+Mesh::Mesh(MainDevice &mainDevice,
 		   VkQueue transferQueue,
 		   VkCommandPool transferCommandPool,
 		   std::vector<Vertex>* vertices,
@@ -13,8 +12,7 @@ Mesh::Mesh(VkPhysicalDevice newPhysicalDevice,
 {
 	m_vertexCount    = static_cast<int>(vertices->size());
 	m_indexCount	 = static_cast<int>(indices->size());
-	m_physicalDevice = newPhysicalDevice;
-	m_logicalDevice  = newLogicalDevice;
+	m_MainDevice	 = mainDevice;
 
 	createVertexBuffer(transferQueue, transferCommandPool, vertices);
 	createIndexBuffer(transferQueue, transferCommandPool, indices);
@@ -37,8 +35,7 @@ void Mesh::createVertexBuffer(VkQueue transferQueue, VkCommandPool transferComma
 	// e verranno bypassate tutte le operazioni di caching standard.
 	// Il tipo del buffer è VK_BUFFER_USAGE_TRANSFER_SRC_BIT, significa che serve per effettuare un traferimento
 	// dei dati all'interno del buffer verso un altra locazione.
-	createBuffer(m_physicalDevice,
-		m_logicalDevice,
+	Utility::CreateBuffer(m_MainDevice,
 		bufferSize,
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -46,16 +43,15 @@ void Mesh::createVertexBuffer(VkQueue transferQueue, VkCommandPool transferComma
 
 	//  Mapping della memoria sul Vertex Buffer
 	void* data;																	 // 1. Creazione di un puntatore ad una locazione della memoria normale
-	vkMapMemory(m_logicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);  // 2. mapping tra la memoria del Vertex Buffer ed il pointer lato host
+	vkMapMemory(m_MainDevice.LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);  // 2. mapping tra la memoria del Vertex Buffer ed il pointer lato host
 	memcpy(data, vertices->data(), static_cast<size_t>(bufferSize));			 // 3. Copio i Vertex Data nel buffer della GPU
-	vkUnmapMemory(m_logicalDevice, stagingBufferMemory);						 // 4. Disassocio il vertice dalla memoria
+	vkUnmapMemory(m_MainDevice.LogicalDevice, stagingBufferMemory);						 // 4. Disassocio il vertice dalla memoria
 
 	// Creazione di un buffer accessibile solo dalla GPU (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT).
 	// Il buffer è sia un buffer VK_BUFFER_USAGE_TRANSFER_DST_BIT
 	// ovvero che è creato per ricevere dei dati da un altra locazione di memoria (lo staging buffer), ma è anche
 	// VK_BUFFER_USAGE_VERTEX_BUFFER_BIT ovvero un buffer per i Vertex Data.
-	createBuffer(m_physicalDevice,
-				 m_logicalDevice,
+	Utility::CreateBuffer(m_MainDevice,
 				 bufferSize,
 				 VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 				 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -64,11 +60,11 @@ void Mesh::createVertexBuffer(VkQueue transferQueue, VkCommandPool transferComma
 
 	// Copia lo staging buffer nel vertex buffer della GPU, è un operazione che viene effettuata attraverso
 	// i CommandBuffer. Ovvero che è veloce perchè viene eseguita dalla GPU.
-	copyBuffer(m_logicalDevice, transferQueue, transferCommandPool, stagingBuffer, m_vertexBuffer, bufferSize);
+	Utility::CopyBuffer(m_MainDevice.LogicalDevice, transferQueue, transferCommandPool, stagingBuffer, m_vertexBuffer, bufferSize);
 
 	// Distruzione dello StagingBuffer e liberazione della sua memoria
-	vkDestroyBuffer(m_logicalDevice, stagingBuffer, nullptr);
-	vkFreeMemory(m_logicalDevice, stagingBufferMemory, nullptr);
+	vkDestroyBuffer(m_MainDevice.LogicalDevice, stagingBuffer, nullptr);
+	vkFreeMemory(m_MainDevice.LogicalDevice, stagingBufferMemory, nullptr);
 }
 
 void Mesh::createIndexBuffer(VkQueue transferQueue, VkCommandPool transferCommandPool, std::vector<uint32_t>* indices)
@@ -82,7 +78,7 @@ void Mesh::createIndexBuffer(VkQueue transferQueue, VkCommandPool transferComman
 
 	// Creazione dello Staging Buffer ed allocazione della memoria in esso
 	// Buffer per dati che devono essere trasferiti da qualche altra parte+
-	createBuffer(m_physicalDevice, m_logicalDevice,
+	Utility::CreateBuffer(m_MainDevice,
 		bufferSize,
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -90,23 +86,23 @@ void Mesh::createIndexBuffer(VkQueue transferQueue, VkCommandPool transferComman
 
 	// Mapping della memoria per l'index buffer
 	void* data;
-	vkMapMemory(m_logicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data); // 2. Creao le associazioni (mapping) tra la memoria del vertex buffer ed il pointer
+	vkMapMemory(m_MainDevice.LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data); // 2. Creao le associazioni (mapping) tra la memoria del vertex buffer ed il pointer
 	memcpy(data, indices->data(), static_cast<size_t>(bufferSize));			 // 3. Copio il vettore dei vertici in un punto in memoria
-	vkUnmapMemory(m_logicalDevice, stagingBufferMemory);						 // 4. Disassocio il vertice dalla memoria
+	vkUnmapMemory(m_MainDevice.LogicalDevice, stagingBufferMemory);						 // 4. Disassocio il vertice dalla memoria
 
 	// Creazione del buffer per Index Data sulla GPU
-	createBuffer(m_physicalDevice, m_logicalDevice, 
+	Utility::CreateBuffer(m_MainDevice,
 		bufferSize, 
 		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		&m_indexBuffer, &m_indexBufferMemory);
 
 	// Copia dello staging buffer sulla GPU
-	copyBuffer(m_logicalDevice, transferQueue, transferCommandPool, stagingBuffer, m_indexBuffer, bufferSize);
+	Utility::CopyBuffer(m_MainDevice.LogicalDevice, transferQueue, transferCommandPool, stagingBuffer, m_indexBuffer, bufferSize);
 
 	// Distruzione dello staging Buffer
-	vkDestroyBuffer(m_logicalDevice, stagingBuffer, nullptr);
-	vkFreeMemory(m_logicalDevice, stagingBufferMemory, nullptr);
+	vkDestroyBuffer(m_MainDevice.LogicalDevice, stagingBuffer, nullptr);
+	vkFreeMemory(m_MainDevice.LogicalDevice, stagingBufferMemory, nullptr);
 }
 
 int Mesh::getVertexCount()
@@ -121,11 +117,11 @@ VkBuffer Mesh::getVertexBuffer()
 
 void Mesh::destroyBuffers()
 {
-	vkDestroyBuffer(m_logicalDevice, m_vertexBuffer, nullptr);
-	vkFreeMemory(m_logicalDevice, m_vertexBufferMemory, nullptr);
+	vkDestroyBuffer(m_MainDevice.LogicalDevice, m_vertexBuffer, nullptr);
+	vkFreeMemory(m_MainDevice.LogicalDevice, m_vertexBufferMemory, nullptr);
 
-	vkDestroyBuffer(m_logicalDevice, m_indexBuffer, nullptr);
-	vkFreeMemory(m_logicalDevice, m_indexBufferMemory, nullptr);
+	vkDestroyBuffer(m_MainDevice.LogicalDevice, m_indexBuffer, nullptr);
+	vkFreeMemory(m_MainDevice.LogicalDevice, m_indexBufferMemory, nullptr);
 }
 
 int Mesh::getIndexCount()
