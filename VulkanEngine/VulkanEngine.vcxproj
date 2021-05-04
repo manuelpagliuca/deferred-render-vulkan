@@ -53,7 +53,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;ENABLED_VALIDATION_LAYERS;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)Vendor\GLFW\include;C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)Vendor\GLM\;$(SolutionDir)Vendor\STB_IMAGE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -74,7 +74,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Vendor\GLFW\include;C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)Vendor\GLM\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Vendor\GLFW\include;C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)Vendor\GLM\;$(SolutionDir)Vendor\STB_IMAGE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <UndefinePreprocessorDefinitions>ENABLED_VALIDATION_LAYERS;</UndefinePreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -86,7 +87,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CommandHandler.cpp" />
     <ClCompile Include="DebugMessanger.cpp" />
+    <ClCompile Include="DescriptorsHandler.cpp" />
     <ClCompile Include="GraphicPipeline.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Mesh.cpp" />
@@ -101,8 +104,10 @@
     <ClCompile Include="VulkanRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CommandHandler.h" />
     <ClInclude Include="DataStructures.h" />
     <ClInclude Include="DebugMessanger.h" />
+    <ClInclude Include="DescriptorsHandler.h" />
     <ClInclude Include="GraphicPipeline.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Mesh.h" />

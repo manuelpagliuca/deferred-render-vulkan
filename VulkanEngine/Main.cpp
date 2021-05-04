@@ -42,7 +42,7 @@ int main(void)
 		deltaTime = now - lastTime;
 		lastTime = now;
 
-		angle += 10.0f * deltaTime;
+		angle += 1.0f * deltaTime;
 		if (angle > 360.0f) { angle -= 360.0f; }
 
 		glm::mat4 firstModel(1.0f);
@@ -51,13 +51,13 @@ int main(void)
 		firstModel = glm::translate(firstModel, glm::vec3(0.0f, 0.0f, -2.5f));
 		firstModel = glm::rotate(firstModel, glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f));
 
-		secondModel = glm::translate(secondModel, glm::vec3(0.0f, 0.0f, -3.0f));
+		secondModel = glm::translate(secondModel, glm::vec3(0.0f, 0.0f, angle));
 		secondModel = glm::rotate(secondModel, glm::radians(-angle * 10), glm::vec3(0.0f, 0.0f, 1.0f));
 
-		vulkanRenderer->updateModel(0, firstModel);
-		vulkanRenderer->updateModel(1, secondModel);
+		vulkanRenderer->UpdateModel(0, firstModel);
+		vulkanRenderer->UpdateModel(1, secondModel);
 
-		vulkanRenderer->draw();
+		vulkanRenderer->Draw();
 	}
 
 	glfwDestroyWindow(window);				// Distruzione della finestra GLFW

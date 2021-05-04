@@ -147,7 +147,53 @@ void Utility::CopyImageBuffer(VkDevice &device, VkQueue transferQueue, VkCommand
 
 	EndAndSubmitCommandBuffer(device, transferCommandPool, transferQueue, transferCommandBuffer);
 }
+/*
+Model* Utility::AllocateDynamicBufferTransferSpace(VkDeviceSize minUniformBufferOffset)
+{
+	// Allineamento dei dati per la Model
+	/*
+	Si vuole scoprire l'allineamento da utilizzare per la Model Uniform. Si utilizzano varie operazioni di bitwise.
+	e.g, fingiamo che la dimensione minima di offset sia di 32-bit quindi rappresentata da 00100000.
+	Al di sopra di questa dimensione di bit sono accettati tutti i suoi multipli (32,64,128,...).
 
+	Quindi singifica che se la dimensione della Model è di 16-bit non sarà presente un allineamento per la memoria
+	che sia valido, mentre 128-bit andrà bene. Per trovare questo allineamento si utilizza una maschera di per i 32-bit
+	in modo da poterla utilizzare con l'operazione BITWISE di AND (&) con la dimensione effettiva in byte della Model.
+
+	Il risultato di questa operazioni saranno i byte dell'allineamento necessari.
+	Per la creazione della maschera stessa si utilizza il complemento a 1 seguito dall'inversione not (complemento a 1).
+
+	32-bit iniziali (da cui voglio creare la maschera) : 00100000
+	32-bit meno 1 (complemento a 2) : 00011111
+	32-bit complemento a 1 : 11100000 (maschera di bit risultante)
+
+	maschera : ~(minOffset -1)
+	Allineamento risultante : sizeof(UboModel) & maschera
+
+	Tutto funziona corretto finchè non si vuole utilizzare una dimensione che non è un multiplo diretto della maschera
+	per esempio 00100010, in questo caso la mascherà risultante sarà 11100000 ma questa da un allineamento di 00100000.
+	cosa che non è corretta perchè si perde il valore contenuto nella penultima cifra!
+
+	Come soluzione a questa problematica si vuole spostare la cifra che verrebbe persa subito dopo quella risultante
+	dall'allineamento, in questo modo l'allineamento dovrebbe essere corretto.
+
+	Per fare ciò aggiungiamo 32 bit e facciamo il complemento a 2 su questi 32-bit.
+	00100000 => 00011111
+	Ora aggiungendo questi bit alla dimensione della Model dovrebbe essere protetta.
+	*//*
+	unsigned long long const offsetMask			= ~(minUniformBufferOffset - 1);
+	unsigned long long const protectedModelSize = (sizeof(Model) + minUniformBufferOffset - 1);
+	size_t modelUniformAlignment = protectedModelSize & offsetMask;
+	
+	// Allocazione spazio in memoria per gestire il dynamic buffer che è allineato, e con un limite di oggetti
+	return static_cast<Model*>(_aligned_malloc(modelUniformAlignment * MAX_OBJECTS, modelUniformAlignment));
+}
+
+void Utility::FreeAlignedMemoryDUBO(Model * modelTransferSpace)
+{
+	_aligned_free(modelTransferSpace);
+}
+*/
 void Utility::TransitionImageLayout(VkDevice &device, VkQueue queue, VkCommandPool commandPool, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout)
 {
 	VkCommandBuffer commandBuffer = BeginCommandBuffer(device, commandPool);
@@ -279,6 +325,23 @@ VkImageView Utility::CreateImageView(VkDevice& device, VkImage image, VkFormat f
 	return imageView;
 }
 
+void Utility::CreateDepthBufferImage(DepthBufferImage& image, MainDevice &mainDevice, VkExtent2D imgExtent)
+{
+	// Depth value of 32bit expressed in floats + stencil buffer (non lo usiamo ma è utile averlo disponibile)
+// Nel caso in cui lo stencil buffer non sia disponibile andiamo a prendere solo il depth buffer 32 bit.
+// Se non è disponibile neanche quello da 32 bit si prova con quello di 24 (poi non proviamo più).
+	image.Format = Utility::ChooseSupportedFormat(mainDevice, { VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D24_UNORM_S8_UINT },
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+
+	image.Image = Utility::CreateImage(mainDevice, imgExtent.width, imgExtent.height,
+		image.Format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &image.Memory);
+
+	image.ImageView = Utility::CreateImageView(mainDevice.LogicalDevice, image.Image, image.Format, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+
+}
+
 uint32_t Utility::FindMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t supportedMemoryTypes, VkMemoryPropertyFlags properties)
 {
 	// Query per le proprietà della memoria
@@ -330,7 +393,7 @@ VkShaderModule Utility::CreateShaderModule(VkDevice &device, const std::vector<c
 }
 
 int Utility::CreateTexture(
-	MainDevice &mainDevice ,
+	MainDevice &mainDevice , VkDescriptorPool &texturePool, VkDescriptorSetLayout &textureLayout,
 	TextureObjects & textureObjects, VkQueue& graphicsQueue, 
 	VkCommandPool& graphicsCommandPool,
 	std::string fileName)
@@ -341,7 +404,7 @@ int Utility::CreateTexture(
 	textureObjects.TextureImageViews.push_back(imageView);
 
 	// TODO : Create Descriptor Set Here
-	int descriptorLoc = CreateTextureDescriptor(mainDevice.LogicalDevice, imageView, textureObjects);
+	int descriptorLoc = CreateTextureDescriptor(mainDevice.LogicalDevice, imageView, texturePool, textureLayout, textureObjects);
 
 	return descriptorLoc;
 }
@@ -413,15 +476,15 @@ stbi_uc* Utility::LoadTextureFile(std::string fileName, int* width, int* height,
 	return nullptr;
 }
 
-int Utility::CreateTextureDescriptor(VkDevice &device, VkImageView textureImage, TextureObjects &textureObjects)
+int Utility::CreateTextureDescriptor(VkDevice &device, VkImageView textureImage, VkDescriptorPool &texturePool, VkDescriptorSetLayout &textureLayout, TextureObjects &textureObjects)
 {
 	VkDescriptorSet descriptorSet;
 
 	VkDescriptorSetAllocateInfo setAllocInfo = {};
 	setAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	setAllocInfo.descriptorPool = textureObjects.SamplerDescriptorPool;
+	setAllocInfo.descriptorPool = texturePool;
 	setAllocInfo.descriptorSetCount = 1;
-	setAllocInfo.pSetLayouts = &textureObjects.SamplerSetLayout;
+	setAllocInfo.pSetLayouts = &textureLayout;
 
 	VkResult result = vkAllocateDescriptorSets(device, &setAllocInfo, &descriptorSet);
 	if (result != VK_SUCCESS)
@@ -469,4 +532,80 @@ VkFormat Utility::ChooseSupportedFormat(MainDevice &mainDevice, const std::vecto
 		}
 	}
 	throw std::runtime_error("Failed to find a matching format!");
+}
+
+void Utility::GetQueueFamilyIndices(VkPhysicalDevice &physicalDevice, VkSurfaceKHR &surface, QueueFamilyIndices& queueFamilyIndices)
+{
+	// Prelevo le Queue Families disponibili nel dispositivo fisico
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+
+	std::vector<VkQueueFamilyProperties> queueFamilyList(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyList.data());
+
+	// Indice delle Queue Families (a carico del developer)
+	int queueIndex = 0;
+
+	if (queueFamilyCount > 0)
+	{
+		for (const auto& queueFamily : queueFamilyList)
+		{
+			// Se la QueueFamily è valida ed è una Queue grafica, salvo l'indice nel Renderer
+			if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+			{
+				queueFamilyIndices.GraphicsFamily = queueIndex;
+			}
+
+			VkBool32 presentationSupport = false;
+
+			/*	Query per chiedere se è supportata la Presentation Mode nella Queue Family.
+				Solitamente le Queue Family appartenenti alla grafica la supportano.
+				Questa caratteristica è obbligatoria per presentare l'immagine dalla SwapChain alla Surface.*/
+			vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, queueIndex, surface, &presentationSupport);
+
+			// Se la Queue Family supporta la Presentation Mode, salvo l'indice nel Renderer (solitamente sono gli stessi indici)
+			if (presentationSupport)
+			{
+				queueFamilyIndices.PresentationFamily = queueIndex;
+			}
+
+			if (queueFamilyIndices.isValid())
+			{
+				break;
+			}
+
+			++queueIndex;
+		}
+	}
+}
+
+bool Utility::CheckDeviceExtensionSupport(VkPhysicalDevice& device, const std::vector<const char*>& requestedDeviceExtensions)
+{
+	uint32_t extensionCount = 0;
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+	if (extensionCount == 0)
+		return false;
+
+	std::vector<VkExtensionProperties> physicalDeviceExtensions(extensionCount);
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, physicalDeviceExtensions.data());
+
+	for (const auto& extensionToCheck : requestedDeviceExtensions)
+	{
+		bool hasExtension = false;
+
+		for (const auto& extension : physicalDeviceExtensions)
+		{
+			if (strcmp(extensionToCheck, extension.extensionName) == 0)
+			{
+				hasExtension = true;
+				break;
+			}
+		}
+
+		if (!hasExtension)
+			return false;
+	}
+
+	return true;
 }

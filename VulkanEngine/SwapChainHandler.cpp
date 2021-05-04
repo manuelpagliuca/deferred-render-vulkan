@@ -5,7 +5,7 @@
 SwapChainHandler::SwapChainHandler()
 {
 	m_Swapchain				= 0;
-	m_VulkanPhysicalDevice	= 0;
+	m_MainDevice = {};
 	m_VulkanDevice			= 0;
 	m_VulkanSurface			= 0;
 	m_SwapChainExtent		= {};
@@ -13,10 +13,10 @@ SwapChainHandler::SwapChainHandler()
 	m_GLFWwindow			= nullptr;
 }
 	
-SwapChainHandler::SwapChainHandler(VkPhysicalDevice &physicalDevice, VkDevice&device, VkSurfaceKHR &surface, GLFWwindow * glfwWindow)
+SwapChainHandler::SwapChainHandler(MainDevice &mainDevice, VkDevice&device, VkSurfaceKHR &surface, GLFWwindow * glfwWindow)
 {
 	m_Swapchain				= 0;
-	m_VulkanPhysicalDevice  = physicalDevice;
+	m_MainDevice = mainDevice;
 	m_VulkanDevice			= device;
 	m_VulkanSurface			= surface;
 	m_SwapChainExtent		= {};
@@ -57,6 +57,11 @@ size_t SwapChainHandler::NumOfSwapChainImages() const
 VkFramebuffer& SwapChainHandler::GetFrameBuffer(uint32_t index)
 {
 	return m_SwapChainFrameBuffers[index];
+}
+
+std::vector<VkFramebuffer>& SwapChainHandler::GetFrameBuffers()
+{
+	return m_SwapChainFrameBuffers;
 }
 
 void SwapChainHandler::PushFrameBuffer(VkFramebuffer frameBuffer)
@@ -123,7 +128,7 @@ void SwapChainHandler::CreateSwapChain(QueueFamilyIndices &t_QueueFamilyIndices)
 // Crea le Image Views e le carica assieme alle Image all'interno del vettore 'm_swapChainImages'
 
 	// Preleva le informazioni della SwapChain (Capabilities, Formats, Presentation modes) a partire dalla Surface
-	SwapChainDetails swapChainDetails = GetSwapChainDetails(m_VulkanPhysicalDevice, m_VulkanSurface);
+	SwapChainDetails swapChainDetails = GetSwapChainDetails(m_MainDevice.PhysicalDevice, m_VulkanSurface);
 
 	// Dalle precedenti informazioni seleziono le impostazioni migliori per la SwapChain 
 	VkExtent2D extent				  = ChooseSwapExtent(swapChainDetails.surfaceCapabilities);
@@ -205,6 +210,38 @@ void SwapChainHandler::CreateSwapChain(QueueFamilyIndices &t_QueueFamilyIndices)
 		swapChainImage.image = image;
 		swapChainImage.imageView = Utility::CreateImageView(m_VulkanDevice, image, m_SwapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 		m_SwapChainImages.push_back(swapChainImage);
+	}
+}
+
+// Creazione dei Framebuffer, effettuano una connessione tra il RenderPass e le immagini. Utilizzando rispettivamente Attachments ed ImageView
+void SwapChainHandler::CreateFrameBuffers(VkRenderPass &renderPass, VkImageView & depthBufferImageView)
+{
+	ResizeFrameBuffers();
+
+	// Creiamo un framebuffer per ogni immagine della swapchain
+	for (uint32_t i = 0; i < NumOfFrameBuffers(); ++i)
+	{
+		std::array<VkImageView, 2> attachments = {
+			GetSwapChainImageView(i),
+			depthBufferImageView
+		};
+
+		VkFramebufferCreateInfo frameBufferCreateInfo = {};
+		frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		frameBufferCreateInfo.renderPass = renderPass;							   // RenderPass
+		frameBufferCreateInfo.attachmentCount = static_cast<uint32_t>(attachments.size()); // Numero degli attachments
+		frameBufferCreateInfo.pAttachments = attachments.data();						   // Lista degli attachments 1:1 con il RenderPass
+		frameBufferCreateInfo.width  = GetExtentWidth();				   // Framebuffer width
+		frameBufferCreateInfo.height = GetExtentHeight();				   // Framebuffer height
+		frameBufferCreateInfo.layers = 1;										   // Framebuffer layers
+
+		VkResult result = vkCreateFramebuffer(m_MainDevice.LogicalDevice, &frameBufferCreateInfo, nullptr, &GetFrameBuffer(i));
+
+		if (result != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to create a Framebuffer!");
+		}
+
 	}
 }
 

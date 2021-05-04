@@ -21,9 +21,6 @@ DebugMessanger* DebugMessanger::GetInstance()
 
 void DebugMessanger::SetupDebugMessenger(VkInstance &instance)
 {
-	if (!enableValidationLayers)
-		return;
-
 	VkDebugUtilsMessengerCreateInfoEXT createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;	// Il tipo della struttura
 	createInfo.flags = 0;
