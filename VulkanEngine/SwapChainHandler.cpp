@@ -1,5 +1,4 @@
 #include "pch.h"
-
 #include "SwapChainHandler.h"
 
 SwapChainHandler::SwapChainHandler()
@@ -73,7 +72,7 @@ void SwapChainHandler::SetRenderPass(VkRenderPass* renderPass)
 	m_RenderPass = renderPass;
 }
 
-void SwapChainHandler::IsRecreating(bool const status)
+void SwapChainHandler::SetRecreationStatus(bool const status)
 {
 	m_IsRecreating = status;
 }
@@ -100,17 +99,13 @@ void SwapChainHandler::CleanUpSwapChain()
 void SwapChainHandler::DestroyFrameBuffers()
 {
 	for (auto framebuffer : m_SwapChainFrameBuffers)
-	{
 		vkDestroyFramebuffer(m_MainDevice.LogicalDevice, framebuffer, nullptr);
-	}
 }
 
 void SwapChainHandler::DestroySwapChainImageViews()
 {
 	for (auto image : m_SwapChainImages)
-	{
 		vkDestroyImageView(m_MainDevice.LogicalDevice, image.imageView, nullptr);
-	}
 }
 
 void SwapChainHandler::DestroySwapChain()
@@ -235,7 +230,6 @@ void SwapChainHandler::RecreateSwapChain()
 	CreateSwapChain();
 }
 
-// Creazione dei Framebuffer, effettuano una connessione tra il RenderPass e le immagini. Utilizzando rispettivamente Attachments ed ImageView
 void SwapChainHandler::CreateFrameBuffers(VkImageView & depthBufferImageView)
 {
 	ResizeFrameBuffers();
@@ -249,12 +243,12 @@ void SwapChainHandler::CreateFrameBuffers(VkImageView & depthBufferImageView)
 
 		VkFramebufferCreateInfo frameBufferCreateInfo = {};
 		frameBufferCreateInfo.sType				= VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		frameBufferCreateInfo.renderPass		= *m_RenderPass;		 // RenderPass
-		frameBufferCreateInfo.attachmentCount	= static_cast<uint32_t>(attachments.size()); // Numero degli attachments
-		frameBufferCreateInfo.pAttachments		= attachments.data();						 // Lista degli attachments 1:1 con il RenderPass
-		frameBufferCreateInfo.width				= GetExtentWidth();							 // Framebuffer width
-		frameBufferCreateInfo.height			= GetExtentHeight();						 // Framebuffer height
-		frameBufferCreateInfo.layers			= 1;										 // Framebuffer layers
+		frameBufferCreateInfo.renderPass		= *m_RenderPass;		
+		frameBufferCreateInfo.attachmentCount	= static_cast<uint32_t>(attachments.size()); 
+		frameBufferCreateInfo.pAttachments		= attachments.data();						 
+		frameBufferCreateInfo.width				= GetExtentWidth();							 
+		frameBufferCreateInfo.height			= GetExtentHeight();						 
+		frameBufferCreateInfo.layers			= 1;										 
 
 		VkResult result = vkCreateFramebuffer(m_MainDevice.LogicalDevice, &frameBufferCreateInfo, nullptr, &m_SwapChainFrameBuffers[i]);
 
@@ -271,7 +265,6 @@ SwapChainDetails SwapChainHandler::GetSwapChainDetails(VkPhysicalDevice &physica
 
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &swapChainDetails.surfaceCapabilities);
 
-	// Scarica in un'array delle coppie <Formato Immagine, Spazio Colore> che sono supportate dalla Surface
 	uint32_t formatCount = 0;
 	vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr);
 
@@ -281,7 +274,6 @@ SwapChainDetails SwapChainHandler::GetSwapChainDetails(VkPhysicalDevice &physica
 		vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, swapChainDetails.formats.data());
 	}
 
-	// Preleva le Presentation Mode supportate dalla Surface
 	uint32_t presentationCount = 0;
 	vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentationCount, nullptr);
 
@@ -290,26 +282,26 @@ SwapChainDetails SwapChainHandler::GetSwapChainDetails(VkPhysicalDevice &physica
 		swapChainDetails.presentationModes.resize(presentationCount);
 		vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentationCount, swapChainDetails.presentationModes.data());
 	}
-
 	return swapChainDetails;
 }
 
 VkSurfaceFormatKHR SwapChainHandler::ChooseBestSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats)
 {
-	if (formats.size() == 1 && formats[0].format == VK_FORMAT_UNDEFINED)		// Se è disponibile solo un formato ed è undefined
-	{																			// significa che sono disponibili tutti i formati (no restrictions).
-		return { VK_FORMAT_R8G8B8A8_UNORM , VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
-	}
+	bool const onlyOneFormat = formats.size() == 1;
+	bool const isUndefined	 = formats[0].format == VK_FORMAT_UNDEFINED;
 
-	// Altrimenti significa che è presente un numero ristretto di formati
-	// Allora si cerca per quello ottimale (RGBA o BGRA)
+	if (onlyOneFormat && isUndefined)
+		// significa che sono disponibili tutti i formati (no restrictions).
+		return { VK_FORMAT_R8G8B8A8_UNORM , VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
+
 	for (const auto& format : formats)
 	{
-		if ((format.format == VK_FORMAT_R8G8B8A8_UNORM || format.format == VK_FORMAT_B8G8R8A8_UNORM)
-			&& format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-		{
+		bool const isFormatRGBA		= format.format == VK_FORMAT_R8G8B8A8_UNORM;
+		bool const isFormatBGRA		= format.format == VK_FORMAT_B8G8R8A8_UNORM;
+		bool const isColorSpaceSRGB	= format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+
+		if ((isFormatRGBA || isFormatBGRA) && isColorSpaceSRGB)
 			return format;
-		}
 	}
 
 	return formats[0];
@@ -319,11 +311,12 @@ VkPresentModeKHR SwapChainHandler::ChooseBestPresentationMode(const std::vector<
 {
 	for (const auto& presentationMode : presentationModes)
 	{
-		if (presentationMode == VK_PRESENT_MODE_MAILBOX_KHR)
-		{
+		bool const isMailBox = presentationMode == VK_PRESENT_MODE_MAILBOX_KHR;
+
+		if (isMailBox)
 			return presentationMode;
-		}
 	}
+
 	return VK_PRESENT_MODE_FIFO_KHR;
 }
 
@@ -331,7 +324,10 @@ VkExtent2D SwapChainHandler::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& su
 {
 	// Se la corrente Extent presente nella surface ha una
 	// dimensione differente dal limite numerico, allora è contenuta la dimensione corretta della finestra
-	if (surfaceCapabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+
+	bool const isExtentCorrect = surfaceCapabilities.currentExtent.width != std::numeric_limits<uint32_t>::max();
+
+	if (isExtentCorrect)
 	{
 		return surfaceCapabilities.currentExtent;
 	}
@@ -342,14 +338,12 @@ VkExtent2D SwapChainHandler::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& su
 		glfwGetFramebufferSize(m_GLFWwindow, &width, &height);	// Si prelevano le dimensioni della finestra di GLFW
 															// Si crea una nuova Extent con le dimensioni corrette
 		VkExtent2D newExtent = {};
-		newExtent.width = static_cast<uint32_t>(width);
-		newExtent.height = static_cast<uint32_t>(height);
+		newExtent.width		= static_cast<uint32_t>(width);
+		newExtent.height	= static_cast<uint32_t>(height);
 
-		newExtent.width = std::max(surfaceCapabilities.minImageExtent.width,
-			std::min(surfaceCapabilities.maxImageExtent.width, newExtent.width));
+		newExtent.width = std::max(surfaceCapabilities.minImageExtent.width, std::min(surfaceCapabilities.maxImageExtent.width, newExtent.width));
 
-		newExtent.height = std::max(surfaceCapabilities.minImageExtent.height,
-			std::min(surfaceCapabilities.maxImageExtent.height, newExtent.height));
+		newExtent.height = std::max(surfaceCapabilities.minImageExtent.height, std::min(surfaceCapabilities.maxImageExtent.height, newExtent.height));
 
 		return newExtent;
 	}

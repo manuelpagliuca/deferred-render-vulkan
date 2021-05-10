@@ -7,13 +7,17 @@ VulkanRenderer::VulkanRenderer()
 	m_VulkanInstance					= 0;
 	m_Surface							= 0;
 	m_PushCostantRange					= {};
-	m_graphicsQueue						= 0;
-	m_presentationQueue					= 0;
+	m_GraphicsQueue						= 0;
+	m_PresentationQueue					= 0;
 	m_MainDevice.LogicalDevice			= 0;
 	m_MainDevice.PhysicalDevice			= 0;
 	m_UBOViewProjection.projection		= glm::mat4(1.f);
 	m_UBOViewProjection.view			= glm::mat4(1.f);
 	m_MainDevice.MinUniformBufferOffset	= 0;
+	
+	m_Scene				 = Scene(&m_MainDevice, &m_DescriptorsHandler, &m_GraphicsQueue, &m_CommandHandler);
+	m_RenderPassHandler  = RenderPassHandler(&m_MainDevice, &m_SwapChainHandler);
+	m_DescriptorsHandler = DescriptorsHandler(&m_MainDevice.LogicalDevice);
 }
 
 int VulkanRenderer::Init(void* t_window)
@@ -28,24 +32,20 @@ int VulkanRenderer::Init(void* t_window)
 
 	try
 	{
-		CreateInstance();
-		CreateSurface();
-		GetPhysicalDevice();
-		CreateLogicalDevice();
+		CreateRenderFoundations();
 
-		m_SwapChainHandler	 = SwapChainHandler(m_MainDevice, m_Surface, m_Window, m_QueueFamilyIndices);
+		m_SwapChainHandler	= SwapChainHandler(m_MainDevice, m_Surface, m_Window, m_QueueFamilyIndices);
 		m_SwapChainHandler.CreateSwapChain();
 
-		m_DescriptorsHandler = DescriptorsHandler(m_MainDevice.LogicalDevice);
 		m_DescriptorsHandler.CreateViewProjectionDescriptorSetLayout();
 		m_DescriptorsHandler.CreateTextureDescriptorSetLayout();
 
-		m_RenderPassHandler  = RenderPassHandler(m_MainDevice, m_SwapChainHandler);
+		m_RenderPassHandler.CreateRenderPass();
+		
 		CreatePushCostantRange();
-
-		m_GraphicPipeline	 = GraphicPipeline(m_MainDevice, m_SwapChainHandler, &m_RenderPassHandler,
-			m_DescriptorsHandler.GetViewProjectionDescriptorSetLayout(), 
-			m_DescriptorsHandler.GetTextureDescriptorSetLayout(), m_PushCostantRange);
+		auto vpDescSet		= m_DescriptorsHandler.GetViewProjectionDescriptorSetLayout();
+		auto texDesSet		= m_DescriptorsHandler.GetTextureDescriptorSetLayout();
+		m_GraphicPipeline	= GraphicPipeline(m_MainDevice, m_SwapChainHandler, &m_RenderPassHandler, vpDescSet, texDesSet, m_PushCostantRange);
 
 		Utility::CreateDepthBufferImage(m_DepthBufferImage, m_MainDevice, m_SwapChainHandler.GetExtent());
 
@@ -64,59 +64,15 @@ int VulkanRenderer::Init(void* t_window)
 		m_DescriptorsHandler.CreateDescriptorSets(m_viewProjectionUBO, sizeof(UboViewProjection), m_SwapChainHandler.SwapChainImagesSize());
 
 		CreateSynchronisation();
+		SetViewProjectionData();
 
-		// Creazione delle matrici che verranno caricate sui Descriptor Sets
-		m_UBOViewProjection.projection = glm::perspective(glm::radians(45.0f),
-			static_cast<float>(m_SwapChainHandler.GetExtentWidth()) / static_cast<float>(m_SwapChainHandler.GetExtentHeight()),
-			0.1f, 100.f);
-
-		m_UBOViewProjection.view = glm::lookAt(glm::vec3(0.f, 0.f, 3.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.0f, 0.f));
-
-		// GLM threat Y-AXIS as Up-Axis, but in Vulkan the Y is down.
-		m_UBOViewProjection.projection[1][1] *= -1;
-
-		std::vector<Vertex> meshVertices =
-		{
-			{ { -0.4,  0.4,  0.0 }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } }, // 0
-			{ { -0.4, -0.4,  0.0 }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 0.0f } }, // 1
-			{ {  0.4, -0.4,  0.0 }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } }, // 2
-			{ {  0.4,  0.4,  0.0 }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f } }, // 3
-		};
-
-		std::vector<Vertex> meshVertices2 = {
-			{ { -0.25,  0.6, 0.0 }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 1.0f } },	// 0
-			{ { -0.25, -0.6, 0.0 }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // 1
-			{ {  0.25, -0.6, 0.0 }, { 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f } }, // 2
-			{ {  0.25,  0.6, 0.0 }, { 0.0f, 0.0f, 1.0f }, { 0.0f, 1.0f } }, // 3
-		};
-
-		std::vector<uint32_t> meshIndices = {
-			0, 1, 2,
-			2, 3, 0
-		};
-
-		int giraffeTexture = Utility::CreateTexture(m_MainDevice, m_DescriptorsHandler.GetTexturePool(), m_DescriptorsHandler.GetTextureDescriptorSetLayout(), m_TextureObjects, m_graphicsQueue, m_CommandHandler.GetCommandPool(), "giraffe.jpg");
-
-		m_MeshList.push_back(Mesh(
-			m_MainDevice,
-			m_graphicsQueue, m_CommandHandler.GetCommandPool(),
-			&meshVertices, &meshIndices, giraffeTexture));
-
-		m_MeshList.push_back(Mesh(
-			m_MainDevice,
-			m_graphicsQueue, m_CommandHandler.GetCommandPool(),
-			&meshVertices2, &meshIndices, giraffeTexture));
-
-		glm::mat4 meshModelMatrix = m_MeshList[0].getModel().model;
-		meshModelMatrix = glm::rotate(meshModelMatrix, glm::radians(45.f), glm::vec3(.0f, .0f, 1.0f));
-		m_MeshList[0].setModel(meshModelMatrix);
+		m_Scene.LoadScene(m_MeshList, m_TextureObjects);
 	}
 	catch (std::runtime_error& e)
 	{
 		std::cerr << e.what() << std::endl;
 		return EXIT_FAILURE;
 	}
-
 	return 0;
 }
 
@@ -124,7 +80,6 @@ void VulkanRenderer::UpdateModel(int modelID, glm::mat4 newModel)
 {
 	if (modelID >= m_MeshList.size())
 		return;
-
 	m_MeshList[modelID].setModel(newModel);
 }
 
@@ -181,7 +136,7 @@ void VulkanRenderer::Draw()
 	// e verrà avvisato con il semaforo 'm_renderFinished'.
 	// Inoltre al termine del render verrà anche avvisato il Fence, per dire che è possibile effettuare
 	// l'operazione di drawing a schermo
-	result = vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_SyncObjects[m_CurrentFrame].InFlight);
+	result = vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_SyncObjects[m_CurrentFrame].InFlight);
 	
 	if (result != VK_SUCCESS)
 	{
@@ -200,138 +155,135 @@ void VulkanRenderer::Draw()
 	// Prima di effettuare l'operazione di presentazione dell'immagine a schermo si deve assicurare
 	// che il render della nuova immagine sia pronto, cosa che viene assicurata dal semaforo 'm_renderFinished' del frame corrente.
 	// Allora visto che l'immagine è ufficialmente pronta verrà mostrata a schermo
-	result = vkQueuePresentKHR(m_presentationQueue, &presentInfo);
+	result = vkQueuePresentKHR(m_PresentationQueue, &presentInfo);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR)
 	{
-		//m_SwapChainHandler.RecreateSwapChain();
-		int width = 0, height = 0;
-		glfwGetFramebufferSize(m_Window, &width, &height);
-		
-		while (width == 0 || height == 0) {
-			glfwGetFramebufferSize(m_Window, &width, &height);
-			glfwWaitEvents();
-		}
-
-		vkDeviceWaitIdle(m_MainDevice.LogicalDevice);
-
-		m_SwapChainHandler.DestroyFrameBuffers();
-		
-		m_CommandHandler.FreeCommandBuffers();
-		
-		m_GraphicPipeline.DestroyPipeline();
-
-		m_SwapChainHandler.DestroySwapChainImageViews();
-		m_SwapChainHandler.DestroySwapChain();
-		m_SwapChainHandler.IsRecreating(true);
-		m_SwapChainHandler.CreateSwapChain();
-		m_SwapChainHandler.IsRecreating(false);
-
-		m_RenderPassHandler.CreateRenderPass();
-		m_GraphicPipeline.CreateGraphicPipeline();
-		Utility::CreateDepthBufferImage(m_DepthBufferImage, m_MainDevice, m_SwapChainHandler.GetExtent());
-		m_SwapChainHandler.CreateFrameBuffers(m_DepthBufferImage.ImageView);
-		m_CommandHandler.CreateCommandBuffers(m_SwapChainHandler.FrameBuffersSize());
+		HandleMinimization();
 		return;
 	}
 	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
-	{
 		throw std::runtime_error("Failed to present the image!");
-	}
 
 	m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
+void VulkanRenderer::HandleMinimization()
+{
+	int width = 0, height = 0;
+	glfwGetFramebufferSize(m_Window, &width, &height);
+
+	while (width == 0 || height == 0) {
+		glfwGetFramebufferSize(m_Window, &width, &height);
+		glfwWaitEvents();
+	}
+
+	vkDeviceWaitIdle(m_MainDevice.LogicalDevice);
+
+
+	m_CommandHandler.FreeCommandBuffers();
+
+	m_GraphicPipeline.DestroyPipeline();
+
+	m_SwapChainHandler.DestroyFrameBuffers();
+	m_SwapChainHandler.DestroySwapChainImageViews();
+	m_SwapChainHandler.DestroySwapChain();
+	m_SwapChainHandler.SetRecreationStatus(true);
+	m_SwapChainHandler.CreateSwapChain();
+	m_SwapChainHandler.SetRecreationStatus(false);
+
+	m_RenderPassHandler.CreateRenderPass();
+
+	m_GraphicPipeline.CreateGraphicPipeline();
+
+	Utility::CreateDepthBufferImage(m_DepthBufferImage, m_MainDevice, m_SwapChainHandler.GetExtent());
+
+	m_SwapChainHandler.CreateFrameBuffers(m_DepthBufferImage.ImageView);
+
+	m_CommandHandler.CreateCommandBuffers(m_SwapChainHandler.FrameBuffersSize());
+}
+
 void VulkanRenderer::CreateInstance()
 {
-	// Controllare se le Validation Layers sono abilitate
-	std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" };				// Vettore contenente le Validation Layers (come cstring)
+	std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" };
 
 #ifdef ENABLED_VALIDATION_LAYERS
-	if (!CheckValidationLayerSupport(&validationLayers))				// Controlla che le Validation Layers richieste siano effettivamente supportate
-	{																							// (nel caso in cui siano state abilitate).
-		throw std::runtime_error("VkInstance doesn't support the required validation layers");	// Nel caso in cui le Validation Layers non siano disponibili
-	}
-#endif // ENABLED_VALIDATION_LAYERS
+	if (!CheckValidationLayerSupport(&validationLayers))
+		throw std::runtime_error("VkInstance doesn't support the required validation layers");
+#endif 
 
-	
-	// APPLICATION INFO (per la creazione di un istanza di Vulkan si necessitano le informazioni a riguardo dell'applicazione)
 	VkApplicationInfo appInfo = {};
 
-	appInfo.sType				= VK_STRUCTURE_TYPE_APPLICATION_INFO; // Tipo di struttura
-	appInfo.pApplicationName	= "Vulkan Render Application";		  // Nome dell'applicazione
-	appInfo.applicationVersion  = VK_MAKE_VERSION(1, 0, 0);			  // Versione personalizzata dell'applicazione
-	appInfo.pEngineName			= "VULKAN RENDERER";				  // Nome dell'engine
-	appInfo.engineVersion		= VK_MAKE_VERSION(1, 0, 0);			  // Versione personalizzata dell'engine
-	appInfo.apiVersion			= VK_API_VERSION_1_0;				  // Versione di Vulkan che si vuole utilizzare (unico obbligatorio)
+	appInfo.sType				= VK_STRUCTURE_TYPE_APPLICATION_INFO; 
+	appInfo.pApplicationName	= "Vulkan Render Application";		  
+	appInfo.applicationVersion  = VK_MAKE_VERSION(1, 0, 0);			  
+	appInfo.pEngineName			= "VULKAN RENDERER";				  
+	appInfo.engineVersion		= VK_MAKE_VERSION(1, 0, 0);			  
+	appInfo.apiVersion			= VK_API_VERSION_1_0;				  
 
-	// VULKAN INSTANCE
 	VkInstanceCreateInfo createInfo = {};
-	createInfo.sType				= VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;	// Tipo di struttura
-	createInfo.pApplicationInfo		= &appInfo;									// Puntatore alle informazioni dell'applicazione
+	createInfo.sType				= VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;	
+	createInfo.pApplicationInfo		= &appInfo;									
 
-	// Carico in un vettore le estensioni per l'istanza
-	std::vector <const char*> instanceExtensions = std::vector<const char*>(); // Vettore che conterrà le estensioni (come cstring)
-	LoadGlfwExtensions(instanceExtensions);									   // Preleva le estensioni di GLFW per Vulkan e le carica nel vettore
-	instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);		   // Carico manualmente nel vettore l'estensione che permette di creare un debug messanger che verrà utilizzato per il Validation Layer (e altro...)
+	std::vector <const char*> instanceExtensions = std::vector<const char*>(); 
+	LoadGlfwExtensions(instanceExtensions);									   
+	instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);		   
 
-	if (!checkInstanceExtensionSupport(&instanceExtensions))								// Controlla se Vulkan supporta le estensioni presenti in instanceExtensions
-	{
-		throw std::runtime_error("VkInstance doesn't support the required extensions");		// Nel caso in cui le estensioni non siano supportate throwa un errore runtime
-	}
+	if (!CheckInstanceExtensionSupport(&instanceExtensions))								
+		throw std::runtime_error("VkInstance doesn't support the required extensions");		
 	
-	createInfo.enabledExtensionCount   = static_cast<uint32_t>(instanceExtensions.size()); // Numero di estensioni abilitate
-	createInfo.ppEnabledExtensionNames = instanceExtensions.data();						   // Prende le estensioni abilitate (e supportate da Vulkan)
+	createInfo.enabledExtensionCount   = static_cast<uint32_t>(instanceExtensions.size()); 
+	createInfo.ppEnabledExtensionNames = instanceExtensions.data();						   
 	
 #ifdef ENABLED_VALIDATION_LAYERS
-	createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());   // Numero di Validation Layers abilitate.
-	createInfo.ppEnabledLayerNames = validationLayers.data();						   // Prende le Validation Layers abilitate (e supportate da Vulkan)
+	createInfo.enabledLayerCount	= static_cast<uint32_t>(validationLayers.size());   
+	createInfo.ppEnabledLayerNames	= validationLayers.data();						 
 #else
-	createInfo.enabledLayerCount = 0;								// Numero di Validation Layers abilitate.
-	createInfo.ppEnabledLayerNames = nullptr;						// Prende le Validation Layers abilitate (e supportate da Vulkan)
-#endif // ENABLED_VALIDATION_LAYERS
+	createInfo.enabledLayerCount = 0;								
+	createInfo.ppEnabledLayerNames = nullptr;						
+#endif
+	VkResult res = vkCreateInstance(&createInfo, nullptr, &m_VulkanInstance);					   
 
-	VkResult res = vkCreateInstance(&createInfo, nullptr, &m_VulkanInstance);					   // Crea un istanza di Vulkan.
-
-	if (res != VK_SUCCESS) // Nel caso in cui l'istanza non venga creata correttamente, alza un eccezione runtime.
-	{
+	if (res != VK_SUCCESS)
 		throw std::runtime_error("Failed to create Vulkan instance");
-	}
 
 #ifdef ENABLED_VALIDATION_LAYERS
 	DebugMessanger::GetInstance()->SetupDebugMessenger(m_VulkanInstance);
-#endif // ENABLED_VALIDATION_LAYERS
+#endif
 }
 
+void VulkanRenderer::CreateRenderFoundations()
+{
+	CreateInstance();
+	CreateSurface();
+	GetPhysicalDevice();
+	CreateLogicalDevice();
+}
 
-// Carica le estensioni di GLFW nel vettore dell'istanza di vulkan
 void VulkanRenderer::LoadGlfwExtensions(std::vector<const char*>& instanceExtensions)
 {
-	uint32_t glfwExtensionCount = 0;	// GLFW potrebbe richiedere molteplici estensioni
-	const char** glfwExtensions;		// Estensioni di GLFW (array di cstrings)
+	uint32_t glfwExtensionCount = 0;	
+	const char** glfwExtensions;		
 
-	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount); // Funzione di GLFW che recupera le estensioni disponibili per Vulkan
-	for (size_t i = 0; i < glfwExtensionCount; ++i)							 // Aggiunge le estensioni di GLFW a quelle dell'istanza di Vulkan
-	{
+	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount); 
+	for (size_t i = 0; i < glfwExtensionCount; ++i)							 
 		instanceExtensions.push_back(glfwExtensions[i]);
-	}
 }
 
-// Controlla se le estensioni scaricate siano effettivamente supportate da Vulkan
-bool VulkanRenderer::checkInstanceExtensionSupport(std::vector<const char*>* extensionsToCheck)
+bool VulkanRenderer::CheckInstanceExtensionSupport(std::vector<const char*>* extensionsToCheck)
 {
-	uint32_t extensionCount = 0;
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);			 // Preleviamo il numero di estensioni disponibili.
+	uint32_t nAvailableExt = 0;
+	vkEnumerateInstanceExtensionProperties(nullptr, &nAvailableExt, nullptr);
 	
-	std::vector<VkExtensionProperties> extensions(extensionCount);						 // Dimensioniamo un vettore con quella quantità.
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data()); // Scarichiamo le estensioni supportate da Vulkan nel vettore
+	std::vector<VkExtensionProperties> availableExt(nAvailableExt);						
+	vkEnumerateInstanceExtensionProperties(nullptr, &nAvailableExt, availableExt.data());
 
-	for (const auto& checkExtension : *extensionsToCheck)			// Si controlla se le estensioni che si vogliono utilizzare
-	{																// combaciano con le estensioni effettivamente supportate da Vulkan
+	for (const auto& proposedExt : *extensionsToCheck)			
+	{																
 		bool hasExtension = false;
-		for (const auto& extension : extensions)
+		for (const auto& extension : availableExt)
 		{
-			if (strcmp(checkExtension, extension.extensionName))
+			if (strcmp(proposedExt, extension.extensionName))
 			{
 				hasExtension = true;
 				break;
@@ -345,17 +297,16 @@ bool VulkanRenderer::checkInstanceExtensionSupport(std::vector<const char*>* ext
 	return true;
 }
 
-// Controlla che le Validation Layers scaricate siano effettivamente supportate da Vulkan
 bool VulkanRenderer::CheckValidationLayerSupport(std::vector<const char*>* validationLayers)
 {
-	uint32_t layerCount;
-	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);				 // Preleviamo il numero di ValidationLayer disponibili
+	uint32_t nAvailableLayers;
+	vkEnumerateInstanceLayerProperties(&nAvailableLayers, nullptr);				 
 
-	std::vector<VkLayerProperties> availableLayers(layerCount);				 // Dimensioniamo un vettore con quella quantità
-	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data()); // Scarichiamo le ValidationLayer all'interno del vettore
+	std::vector<VkLayerProperties> availableLayers(nAvailableLayers);				 
+	vkEnumerateInstanceLayerProperties(&nAvailableLayers, availableLayers.data());
 
-	for (const auto& layerName : *validationLayers)					// Controlliamo se le Validation Layers disponibili nel vettore
-	{																// (quelle di Vulkan) siano compatibili con quelle richieste
+	for (const auto& layerName : *validationLayers)					
+	{																
 		bool layerFound = false;
 
 		for (const auto& layerProperties : availableLayers)
@@ -382,33 +333,27 @@ void VulkanRenderer::GetPhysicalDevice()
 	vkEnumeratePhysicalDevices(m_VulkanInstance, &deviceCount, nullptr);
 
 	if (deviceCount == 0)										  
-	{
 		throw std::runtime_error("Can't find GPU that support Vulkan Instance!");
-	}
 
 	std::vector<VkPhysicalDevice> deviceList(deviceCount);
 	vkEnumeratePhysicalDevices(m_VulkanInstance, &deviceCount, deviceList.data()); 
 
-	// Mi fermo al primo dispositivo che supporta le QueueFamilies Grafiche
 	for (const auto& device : deviceList)			
 	{												
-		if (checkDeviceSuitable(device))
+		if (CheckDeviceSuitable(device))
 		{
 			m_MainDevice.PhysicalDevice = device;
 			break;
 		}
 	}
 
-	// Query delle proprtietà del dispositivo
 	VkPhysicalDeviceProperties deviceProperties;
 	vkGetPhysicalDeviceProperties(m_MainDevice.PhysicalDevice, &deviceProperties);
 
 	m_MainDevice.MinUniformBufferOffset = deviceProperties.limits.minUniformBufferOffsetAlignment;// serve per DYNAMIC UBO
-
 }
 
-// Controlla se un device è adatto per l'applicazione
-bool VulkanRenderer::checkDeviceSuitable(VkPhysicalDevice possibleDevice)
+bool VulkanRenderer::CheckDeviceSuitable(VkPhysicalDevice possibleDevice)
 {
 	 /*Al momento non ci interessano particolari caratteristiche della GPU
 
@@ -484,57 +429,48 @@ void VulkanRenderer::CreateLogicalDevice()
 	VkResult result	= vkCreateDevice(m_MainDevice.PhysicalDevice, &deviceCreateInfo, nullptr, &m_MainDevice.LogicalDevice);	// Creo il device logico
 
 	if (result != VK_SUCCESS)	// Nel caso in cui il Dispositivo Logico non venga creato con successo alzo un eccezione a runtime.
-	{
 		throw std::runtime_error("Failed to create Logical Device!");
-	}
 
 	vkGetDeviceQueue(							// Salvo il riferimento della queue grafica del device logico
-		m_MainDevice.LogicalDevice,				// nella variabile m_graphicsQueue
+		m_MainDevice.LogicalDevice,				// nella variabile m_GraphicsQueue
 		m_QueueFamilyIndices.GraphicsFamily, 
 		0,
-		&m_graphicsQueue);
+		&m_GraphicsQueue);
 		
 	vkGetDeviceQueue(							 // Salvo il riferimento alla Presentation Queue del device logico
-		m_MainDevice.LogicalDevice,				 // nella variabile 'm_presentationQueue'. Siccome è la medesima cosa della
+		m_MainDevice.LogicalDevice,				 // nella variabile 'm_PresentationQueue'. Siccome è la medesima cosa della
 		m_QueueFamilyIndices.PresentationFamily, // queue grafica, nel caso in cui sia presente una sola Queue nel device 
-		0,										 // allora si avranno due riferimenti 'm_presentationQueue' e 'm_graphicsQueue' alla stessa queue
-		&m_presentationQueue);
+		0,										 // allora si avranno due riferimenti 'm_PresentationQueue' e 'm_GraphicsQueue' alla stessa queue
+		&m_PresentationQueue);
 }
 
-// Crea una Surface, dice a Vulkan come interfacciare le immagini con la finestra di GLFW
 void VulkanRenderer::CreateSurface()
 {
 	VkResult res = glfwCreateWindowSurface(m_VulkanInstance, m_Window, nullptr, &m_Surface);
 																		
 	if (res != VK_SUCCESS)
-	{
 		throw std::runtime_error("Failed to create the surface!");
-	}
 }
 
-// Sincronizzazione : 1 semaforo per le immagini disponibili, 1 semaforo per le immagini presentabili/renderizzate, 1 fence per l'operazione di draw
 void VulkanRenderer::CreateSynchronisation()
 {
-	// Oggetti di sincronizzazione quanti i frame in esecuzione
 	m_SyncObjects.resize(MAX_FRAMES_IN_FLIGHT);
 
-	// Semaphore
 	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
 	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-	// Fence
 	VkFenceCreateInfo fenceCreateInfo = {};
 	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;		// Specifica che viene creato nello stato di SIGNALED
+	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;	
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
-		if (vkCreateSemaphore(m_MainDevice.LogicalDevice, &semaphoreCreateInfo, nullptr, &m_SyncObjects[i].ImageAvailable) != VK_SUCCESS ||
-			vkCreateSemaphore(m_MainDevice.LogicalDevice, &semaphoreCreateInfo, nullptr, &m_SyncObjects[i].RenderFinished) != VK_SUCCESS ||
-			vkCreateFence(m_MainDevice.LogicalDevice,	  &fenceCreateInfo,		nullptr, &m_SyncObjects[i].InFlight) != VK_SUCCESS)
-		{
+		VkResult const imageAvailableSemaphore = vkCreateSemaphore(m_MainDevice.LogicalDevice, &semaphoreCreateInfo, nullptr, &m_SyncObjects[i].ImageAvailable);
+		VkResult const renderFinishedSemaphore = vkCreateSemaphore(m_MainDevice.LogicalDevice, &semaphoreCreateInfo, nullptr, &m_SyncObjects[i].RenderFinished);
+		VkResult const inFlightFence		   = vkCreateFence(m_MainDevice.LogicalDevice, &fenceCreateInfo, nullptr, &m_SyncObjects[i].InFlight);
+
+		if (imageAvailableSemaphore != VK_SUCCESS || renderFinishedSemaphore != VK_SUCCESS || inFlightFence != VK_SUCCESS)
 			throw std::runtime_error("Failed to create semaphores and/or Fence!");
-		}
 	}
 }
 
@@ -543,6 +479,14 @@ void VulkanRenderer::CreatePushCostantRange()
 	m_PushCostantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;  // Stage dove finiranno le push costant
 	m_PushCostantRange.offset	  = 0;
 	m_PushCostantRange.size		  = sizeof(Model);
+}
+
+void VulkanRenderer::SetViewProjectionData()
+{
+	float const aspectRatio					= static_cast<float>(m_SwapChainHandler.GetExtentWidth()) / static_cast<float>(m_SwapChainHandler.GetExtentHeight());
+	m_UBOViewProjection.projection			= glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.f);
+	m_UBOViewProjection.view				= glm::lookAt(glm::vec3(0.f, 0.f, 3.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.0f, 0.f));
+	m_UBOViewProjection.projection[1][1]	= m_UBOViewProjection.projection[1][1] * -1.0f;
 }
 
 void VulkanRenderer::CreateUniformBuffers()
@@ -630,13 +574,9 @@ void VulkanRenderer::Cleanup()
 	m_DescriptorsHandler.DestroyViewProjectionPool();
 	m_DescriptorsHandler.DestroyViewProjectionLayout();
 
-	// Distrugge le Meshes
 	for (size_t i = 0; i < m_MeshList.size(); i++)
-	{
 		m_MeshList[i].destroyBuffers();
-	}
 
-	// Distrugge i Semafori
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
 		vkDestroySemaphore(m_MainDevice.LogicalDevice, m_SyncObjects[i].RenderFinished, nullptr);
@@ -657,7 +597,7 @@ void VulkanRenderer::Cleanup()
 
 #ifdef ENABLED_VALIDATION_LAYERS
 	DebugMessanger::GetInstance()->Clear();
-#endif // ENABLED_VALIDATION_LAYERS
+#endif
 
 	vkDestroyDevice(m_MainDevice.LogicalDevice, nullptr);
 	vkDestroyInstance(m_VulkanInstance, nullptr);					

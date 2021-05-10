@@ -1,4 +1,5 @@
 #pragma once
+#pragma warning(disable : 26812 26495)
 
 // Standard Library
 #include <vector>

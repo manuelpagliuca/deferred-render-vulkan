@@ -29,18 +29,16 @@ void GraphicPipeline::CreatePipelineLayout()
 	std::array<VkDescriptorSetLayout, 2> descriptoSetLayouts = { m_DescriptorSetLayout , m_TextureSetLayout };
 
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
-	pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutCreateInfo.setLayoutCount = static_cast<uint32_t>(descriptoSetLayouts.size());					  // Numero di DescriptorSet
-	pipelineLayoutCreateInfo.pSetLayouts = descriptoSetLayouts.data(); // Puntatore ad una lista di DescriptorSetLayout
-	pipelineLayoutCreateInfo.pushConstantRangeCount = 1;						  // Numero di PushCostants
-	pipelineLayoutCreateInfo.pPushConstantRanges = &m_PushCostantRange;		  // Puntatore ad un array di PushCostants
+	pipelineLayoutCreateInfo.sType					= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutCreateInfo.setLayoutCount			= static_cast<uint32_t>(descriptoSetLayouts.size());					  
+	pipelineLayoutCreateInfo.pSetLayouts			= descriptoSetLayouts.data(); 
+	pipelineLayoutCreateInfo.pushConstantRangeCount = 1;						  
+	pipelineLayoutCreateInfo.pPushConstantRanges	= &m_PushCostantRange;		  
 	
 	VkResult res = vkCreatePipelineLayout(m_MainDevice.LogicalDevice, &pipelineLayoutCreateInfo, nullptr, &m_PipelineLayout);
 
 	if (res != VK_SUCCESS)
-	{
 		throw std::runtime_error("Failed to create Pipeline Layout.");
-	}
 }
 
 void GraphicPipeline::CreateGraphicPipeline()

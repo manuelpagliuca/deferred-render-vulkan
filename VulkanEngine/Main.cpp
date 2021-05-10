@@ -2,7 +2,7 @@
 
 #include "VulkanRenderer.h"
 
-void initWindow(GLFWwindow** t_window, std::string wName = "Test Window", const int width = 800, const int height = 600)
+void InitWindow(GLFWwindow** t_window, std::string wName = "Test Window", const int width = 800, const int height = 600)
 {
 	int res = glfwInit();
 
@@ -12,10 +12,9 @@ void initWindow(GLFWwindow** t_window, std::string wName = "Test Window", const 
 	}
 		
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // Impostare GLFW in modo che non lavori con OpenGL
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);	  // Effettuare una resize su una finestra con Vulkan comporta la ricreazione da capo di molti parametri
-												  // Quindi viene disabilitata questa feature.
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);	  // Disabilito la resize (va gestita in un suo modo specifico su Vulkan)
 
-	*t_window = glfwCreateWindow(width, height, wName.c_str(), nullptr, nullptr);	// Carico sul puntatore creato
+	*t_window = glfwCreateWindow(width, height, wName.c_str(), nullptr, nullptr);
 }
 
 int main(void)
@@ -23,18 +22,16 @@ int main(void)
 	VulkanRenderer* vulkanRenderer = new VulkanRenderer();
 	GLFWwindow* window = nullptr;
 
-	initWindow(&window, "Test Vulkan 13/03/2021", 1024, 720); // Inizializzazione di una finestra GLFW
+	InitWindow(&window, "Test Vulkan 13/03/2021", 1920, 1080); 
 
-	if (vulkanRenderer->Init(window) == EXIT_FAILURE)		  // Creazione e controllo del VulkanRenderer
-	{
+	if (vulkanRenderer->Init(window) == EXIT_FAILURE)
 		return EXIT_FAILURE;
-	}
 
 	float angle		= 0.f;
 	float deltaTime = 0.f;
 	float lastTime  = 0.f;
 
-	while (!glfwWindowShouldClose(window))	// Loop finchè non si chiude la finestras
+	while (!glfwWindowShouldClose(window))
 	{
 		glfwPollEvents();
 
@@ -42,7 +39,7 @@ int main(void)
 		deltaTime = now - lastTime;
 		lastTime = now;
 
-		angle += 1.0f * deltaTime;
+		angle += 1.0f * deltaTime*5.0f;
 		if (angle > 360.0f) { angle -= 360.0f; }
 
 		glm::mat4 firstModel(1.0f);
@@ -60,7 +57,7 @@ int main(void)
 		vulkanRenderer->Draw();
 	}
 
-	glfwDestroyWindow(window);				// Distruzione della finestra GLFW
+	glfwDestroyWindow(window);
 	glfwTerminate();
 
 	return 0;

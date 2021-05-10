@@ -15,28 +15,26 @@ struct TextureObjects {
 	void CreateTextureSampler(MainDevice &mainDevice)
 	{
 		VkSamplerCreateInfo samplerCreateInfo = {};
-		samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		samplerCreateInfo.magFilter = VK_FILTER_LINEAR;		// linear interpolation between the texels
-		samplerCreateInfo.minFilter = VK_FILTER_LINEAR;		// quando viene miniaturizzata come renderizzarla (lerp)
-		samplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerCreateInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-		samplerCreateInfo.unnormalizedCoordinates = VK_FALSE;			// è normalizzata
-		samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		samplerCreateInfo.mipLodBias = 0.0f;
-		samplerCreateInfo.minLod = 0.0f;
-		samplerCreateInfo.maxLod = 0.0f;
-		samplerCreateInfo.anisotropyEnable = VK_TRUE;
-		samplerCreateInfo.maxAnisotropy = 16;
+		samplerCreateInfo.sType						= VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerCreateInfo.magFilter					= VK_FILTER_LINEAR;		// linear interpolation between the texels
+		samplerCreateInfo.minFilter					= VK_FILTER_LINEAR;		// quando viene miniaturizzata come renderizzarla (lerp)
+		samplerCreateInfo.addressModeU				= VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerCreateInfo.addressModeV				= VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerCreateInfo.addressModeW				= VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerCreateInfo.borderColor				= VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		samplerCreateInfo.unnormalizedCoordinates	= VK_FALSE;			// è normalizzata
+		samplerCreateInfo.mipmapMode				= VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerCreateInfo.mipLodBias				= 0.0f;
+		samplerCreateInfo.minLod					= 0.0f;
+		samplerCreateInfo.maxLod					= 0.0f;
+		samplerCreateInfo.anisotropyEnable			= VK_TRUE;
+		samplerCreateInfo.maxAnisotropy				= 16;
 
 		VkResult result = vkCreateSampler(mainDevice.LogicalDevice, &samplerCreateInfo, nullptr, &TextureSampler);
-		if (result != VK_SUCCESS)
-		{
-			throw std::runtime_error("Failed to create a Texture Sampler!");
-		}
-	}
 
+		if (result != VK_SUCCESS)
+			throw std::runtime_error("Failed to create a Texture Sampler!");
+	}
 };
 
 struct UboViewProjection {
@@ -61,16 +59,15 @@ struct DepthBufferImage {
 struct SubmissionSyncObjects {
 	VkSemaphore ImageAvailable; // Avvisa quanto l'immagine è disponibile
 	VkSemaphore RenderFinished; // Avvisa quando il rendering è terminato
-	VkFence		InFlight;			  // Fence per il frame in esecuzione
+	VkFence		InFlight;		// Fence per il frame in esecuzione
 };
 
-// Indici delle Queue Families presenti nel device fisico
 struct QueueFamilyIndices {
 
 	int GraphicsFamily	   = -1;
 	int PresentationFamily = -1;
 
-	bool isValid()
+	bool isValid() const
 	{
 		return GraphicsFamily >= 0 && PresentationFamily >= 0;
 	}

@@ -22,9 +22,9 @@ CommandHandler::CommandHandler(MainDevice& mainDevice, GraphicPipeline *pipeline
 void CommandHandler::CreateCommandPool(QueueFamilyIndices &queueIndices)
 {
 	VkCommandPoolCreateInfo poolInfo = {};
-	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // Il nostro CommandBuffer viene resettato ogni qualvolta si accede alla 'vkBeginCommandBuffer()'
-	poolInfo.queueFamilyIndex = queueIndices.GraphicsFamily;			 // I comandi dei CommandBuffers funzionano solo per le Graphic Queues
+	poolInfo.sType				= VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.flags				= VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // Il nostro CommandBuffer viene resettato ogni qualvolta si accede alla 'vkBeginCommandBuffer()'
+	poolInfo.queueFamilyIndex	= queueIndices.GraphicsFamily;			 // I comandi dei CommandBuffers funzionano solo per le Graphic Queues
 
 	VkResult res = vkCreateCommandPool(m_MainDevice.LogicalDevice, &poolInfo, nullptr, &m_GraphicsComandPool);
 

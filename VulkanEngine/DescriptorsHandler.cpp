@@ -14,7 +14,7 @@ DescriptorsHandler::DescriptorsHandler()
 	std::vector<VkDescriptorSet> m_DescriptorSets = {};
 }
 
-DescriptorsHandler::DescriptorsHandler(VkDevice &device)
+DescriptorsHandler::DescriptorsHandler(VkDevice *device)
 {
 	m_Device = device;
 }
@@ -43,7 +43,7 @@ void DescriptorsHandler::CreateDescriptorPool(size_t numOfSwapImgs, size_t UBOsi
 	poolCreateInfo.pPoolSizes = descriptorPoolSizes.data();		// Array di pool size
 
 	// Creazione della Descriptor Pool
-	VkResult res = vkCreateDescriptorPool(m_Device, &poolCreateInfo, nullptr, &m_ViewProjectionPool);
+	VkResult res = vkCreateDescriptorPool(*m_Device, &poolCreateInfo, nullptr, &m_ViewProjectionPool);
 
 	if (res != VK_SUCCESS)
 	{
@@ -62,7 +62,7 @@ void DescriptorsHandler::CreateDescriptorPool(size_t numOfSwapImgs, size_t UBOsi
 	samplerPoolCreateInfo.poolSizeCount = 1;
 	samplerPoolCreateInfo.pPoolSizes = &samplerPoolSize;
 
-	VkResult result = vkCreateDescriptorPool(m_Device, &samplerPoolCreateInfo, nullptr, &m_TexturePool);
+	VkResult result = vkCreateDescriptorPool(*m_Device, &samplerPoolCreateInfo, nullptr, &m_TexturePool);
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Descriptor Pool!");
@@ -71,36 +71,33 @@ void DescriptorsHandler::CreateDescriptorPool(size_t numOfSwapImgs, size_t UBOsi
 
 void DescriptorsHandler::CreateViewProjectionDescriptorSetLayout()
 {
-	// View-Projection Binding Info
 	VkDescriptorSetLayoutBinding viewProjectionLayoutBinding = {};
-	viewProjectionLayoutBinding.binding = 0;									// Punto di binding nello Shader
-	viewProjectionLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; // Tipo di Descriptor Set (Uniform Buffer Object)
-	viewProjectionLayoutBinding.descriptorCount = 1;									// Numero di Descriptor Set da bindare
-	viewProjectionLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;		// Shaders Stage nel quale viene effettuato il binding
-	viewProjectionLayoutBinding.pImmutableSamplers = nullptr;							// rendere il sampler immutable specificando il layout, serve per le textures
+	viewProjectionLayoutBinding.binding				= 0;									
+	viewProjectionLayoutBinding.descriptorType		= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; 
+	viewProjectionLayoutBinding.descriptorCount		= 1;								
+	viewProjectionLayoutBinding.stageFlags			= VK_SHADER_STAGE_VERTEX_BIT;		
+	viewProjectionLayoutBinding.pImmutableSamplers	= nullptr;						
 
 	// Model Binding Info (DYNAMIC UBO)
-	/*VkDescriptorSetLayoutBinding modelLayoutBinding = {};
+	/*
+	VkDescriptorSetLayoutBinding modelLayoutBinding = {};
 	modelLayoutBinding.binding			   = 1;											// Punto di binding nello Shader
 	modelLayoutBinding.descriptorType	   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC; // Tipo di Descriptor Set (Dynamic Uniform Buffer Object)
 	modelLayoutBinding.descriptorCount	   = 1;											// Numero di Descriptor Set da bindare
 	modelLayoutBinding.stageFlags		   = VK_SHADER_STAGE_VERTEX_BIT;				// Shaders Stage nel quale viene effettuato il binding
-	modelLayoutBinding.pImmutableSamplers = nullptr;									// rendere il sampler immutable specificando il layout, serve per le textures
+	modelLayoutBinding.pImmutableSamplers  = nullptr;									// rendere il sampler immutable specificando il layout, serve per le textures
 	*/
 	std::vector<VkDescriptorSetLayoutBinding> layoutBindings = { viewProjectionLayoutBinding };
 
 	VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {};
-	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutCreateInfo.bindingCount = static_cast<uint32_t>(layoutBindings.size());
-	layoutCreateInfo.pBindings = layoutBindings.data();
+	layoutCreateInfo.sType			= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutCreateInfo.bindingCount	= static_cast<uint32_t>(layoutBindings.size());
+	layoutCreateInfo.pBindings		= layoutBindings.data();
 
-	// Creazione del layout del Descriptor Set Layout
-	VkResult result = vkCreateDescriptorSetLayout(m_Device, &layoutCreateInfo, nullptr, &m_ViewProjectionLayout);
+	VkResult result = vkCreateDescriptorSetLayout(*m_Device, &layoutCreateInfo, nullptr, &m_ViewProjectionLayout);
 
 	if (result != VK_SUCCESS)
-	{
 		throw std::runtime_error("Failed to create a Descriptor Set Layout");
-	}
 }
 
 void DescriptorsHandler::CreateTextureDescriptorSetLayout()
@@ -118,7 +115,7 @@ void DescriptorsHandler::CreateTextureDescriptorSetLayout()
 	textureLayoutCreateInfo.bindingCount = 1;
 	textureLayoutCreateInfo.pBindings = &samplerLayoutBinding;
 
-	VkResult result = vkCreateDescriptorSetLayout(m_Device, &textureLayoutCreateInfo, nullptr, &m_TextureLayout);
+	VkResult result = vkCreateDescriptorSetLayout(*m_Device, &textureLayoutCreateInfo, nullptr, &m_TextureLayout);
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Descriptor Set Layout!");
@@ -141,7 +138,7 @@ void DescriptorsHandler::CreateDescriptorSets(std::vector<VkBuffer> & viewProjec
 	setAllocInfo.pSetLayouts = setLayouts.data();							 // Layout da utilizzare per allocare i set (1:1)
 
 	// Allocazione dei descriptor sets (molteplici)
-	VkResult res = vkAllocateDescriptorSets(m_Device, &setAllocInfo, m_DescriptorSets.data());
+	VkResult res = vkAllocateDescriptorSets(*m_Device, &setAllocInfo, m_DescriptorSets.data());
 
 	if (res != VK_SUCCESS)
 	{
@@ -187,7 +184,7 @@ void DescriptorsHandler::CreateDescriptorSets(std::vector<VkBuffer> & viewProjec
 		std::vector<VkWriteDescriptorSet> setWrites = { vpSetWrite };
 
 		// Aggiornamento dei descriptor sets con i nuovi dati del buffer/binding
-		vkUpdateDescriptorSets(m_Device, static_cast<uint32_t>(setWrites.size()), setWrites.data(), 0, nullptr);
+		vkUpdateDescriptorSets(*m_Device, static_cast<uint32_t>(setWrites.size()), setWrites.data(), 0, nullptr);
 	}
 }
 
@@ -213,20 +210,20 @@ std::vector<VkDescriptorSet>& DescriptorsHandler::GetDescriptorSets()
 
 void DescriptorsHandler::DestroyTexturePool()
 {
-	vkDestroyDescriptorPool(m_Device, m_TexturePool, nullptr);
+	vkDestroyDescriptorPool(*m_Device, m_TexturePool, nullptr);
 }
 
 void DescriptorsHandler::DestroyTextureLayout()
 {
-	vkDestroyDescriptorSetLayout(m_Device, m_TextureLayout, nullptr);
+	vkDestroyDescriptorSetLayout(*m_Device, m_TextureLayout, nullptr);
 }
 
 void DescriptorsHandler::DestroyViewProjectionPool()
 {
-	vkDestroyDescriptorPool(m_Device, m_ViewProjectionPool, nullptr);
+	vkDestroyDescriptorPool(*m_Device, m_ViewProjectionPool, nullptr);
 }
 
 void DescriptorsHandler::DestroyViewProjectionLayout()
 {
-	vkDestroyDescriptorSetLayout(m_Device, m_ViewProjectionLayout, nullptr);
+	vkDestroyDescriptorSetLayout(*m_Device, m_ViewProjectionLayout, nullptr);
 }

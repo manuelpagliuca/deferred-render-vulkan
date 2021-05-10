@@ -6,7 +6,7 @@ class DescriptorsHandler
 {
 public:
 	DescriptorsHandler();
-	DescriptorsHandler(VkDevice& device);
+	DescriptorsHandler(VkDevice* device);
 
 	void CreateDescriptorPool(size_t numOfSwapImgs, size_t UBOsize);
 	void CreateViewProjectionDescriptorSetLayout();
@@ -25,7 +25,7 @@ public:
 	void DestroyViewProjectionLayout();
 
 private:
-	VkDevice m_Device;
+	VkDevice *m_Device;
 
 	VkDescriptorPool	  m_ViewProjectionPool;
 	VkDescriptorSetLayout m_ViewProjectionLayout;

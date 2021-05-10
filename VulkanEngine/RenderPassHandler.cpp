@@ -7,16 +7,15 @@ RenderPassHandler::RenderPassHandler()
 	m_RenderPass = 0;
 }
 
-RenderPassHandler::RenderPassHandler(MainDevice& maindevice, SwapChainHandler& swapChainHandler)
+RenderPassHandler::RenderPassHandler(MainDevice* maindevice, SwapChainHandler* swapChainHandler)
 {
-	m_MainDevice = maindevice;
-	m_SwapChainHandler = swapChainHandler;
-	CreateRenderPass();
+	m_MainDevice		= maindevice;
+	m_SwapChainHandler	= swapChainHandler;
 }
 
 void RenderPassHandler::CreateRenderPass()
 {
-	SetColourAttachment(m_SwapChainHandler.GetSwapChainImageFormat());
+	SetColourAttachment(m_SwapChainHandler->GetSwapChainImageFormat());
 	SetDepthAttachment();
 	SetSubpassDescription();
 	SetSubpassDependencies();
@@ -32,7 +31,7 @@ void RenderPassHandler::CreateRenderPass()
 	renderPassCreateInfo.dependencyCount	= static_cast<uint32_t>(m_SubpassDependencies.size());  // Numero di Subpass Dependencies coinvolte
 	renderPassCreateInfo.pDependencies		= m_SubpassDependencies.data();							// Puntatore all'array/vector di Subpass Dependencies
 
-	VkResult res = vkCreateRenderPass(m_MainDevice.LogicalDevice, &renderPassCreateInfo, nullptr, &m_RenderPass);
+	VkResult res = vkCreateRenderPass(m_MainDevice->LogicalDevice, &renderPassCreateInfo, nullptr, &m_RenderPass);
 
 	if (res != VK_SUCCESS)
 	{
@@ -65,7 +64,7 @@ void RenderPassHandler::SetColourAttachment(VkFormat imageFormat)
 void RenderPassHandler::SetDepthAttachment()
 {
 	std::vector<VkFormat> formats = { VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D24_UNORM_S8_UINT };
-	m_DepthAttachment.format			= Utility::ChooseSupportedFormat(m_MainDevice, formats, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+	m_DepthAttachment.format			= Utility::ChooseSupportedFormat(*m_MainDevice, formats, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 	m_DepthAttachment.samples			= VK_SAMPLE_COUNT_1_BIT;
 	m_DepthAttachment.loadOp			= VK_ATTACHMENT_LOAD_OP_CLEAR;
 	m_DepthAttachment.storeOp			= VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -101,7 +100,7 @@ void RenderPassHandler::SetSubpassDependencies()
 
 void RenderPassHandler::DestroyRenderPass()
 {
-	vkDestroyRenderPass(m_MainDevice.LogicalDevice, m_RenderPass, nullptr);
+	vkDestroyRenderPass(m_MainDevice->LogicalDevice, m_RenderPass, nullptr);
 }
 
 void RenderPassHandler::SetSubpassDescription()

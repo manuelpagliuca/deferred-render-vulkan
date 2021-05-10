@@ -9,7 +9,7 @@ class RenderPassHandler
 {
 public:
 	RenderPassHandler();
-	RenderPassHandler(MainDevice& maindevice, SwapChainHandler& swapChainHandler);
+	RenderPassHandler(MainDevice *maindevice, SwapChainHandler* swapChainHandler);
 	
 	VkRenderPass* GetRenderPassReference() { return &m_RenderPass; }
 	VkRenderPass& GetRenderPass()		   { return m_RenderPass; }
@@ -23,8 +23,8 @@ public:
 	void DestroyRenderPass();
 
 private:
-	MainDevice				m_MainDevice;
-	SwapChainHandler		m_SwapChainHandler;
+	MainDevice				*m_MainDevice;
+	SwapChainHandler		*m_SwapChainHandler;
 	VkRenderPass			m_RenderPass = {};
 
 	VkAttachmentDescription m_ColourAttachment = {};

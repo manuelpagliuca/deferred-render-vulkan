@@ -99,6 +99,7 @@
       </PrecompiledHeaderFile>
     </ClCompile>
     <ClCompile Include="RenderPassHandler.cpp" />
+    <ClCompile Include="Scene.cpp" />
     <ClCompile Include="SwapChainHandler.cpp" />
     <ClCompile Include="Utilities.cpp" />
     <ClCompile Include="VulkanRenderer.cpp" />
@@ -112,6 +113,7 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="RenderPassHandler.h" />
+    <ClInclude Include="Scene.h" />
     <ClInclude Include="SwapChainHandler.h" />
     <ClInclude Include="Utilities.h" />
     <ClInclude Include="VulkanRenderer.h" />
