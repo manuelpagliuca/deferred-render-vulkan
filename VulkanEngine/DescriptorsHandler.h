@@ -5,7 +5,7 @@
 class DescriptorsHandler
 {
 public:
-	DescriptorsHandler(){}
+	DescriptorsHandler();
 	DescriptorsHandler(VkDevice& device);
 
 	void CreateDescriptorPool(size_t numOfSwapImgs, size_t UBOsize);

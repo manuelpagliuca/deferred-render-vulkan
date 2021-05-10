@@ -13,7 +13,7 @@ class CommandHandler
 {
 public:
 	CommandHandler();
-	CommandHandler(MainDevice& mainDevice, GraphicPipeline& pipeline, VkRenderPass& renderPass);
+	CommandHandler(MainDevice& mainDevice, GraphicPipeline* pipeline, VkRenderPass* renderPass);
 
 	void CreateCommandPool(QueueFamilyIndices& queueIndices);
 	void CreateCommandBuffers(size_t const numFrameBuffers);
@@ -21,15 +21,18 @@ public:
 		std::vector<Mesh>& meshList, TextureObjects& textureObjects, std::vector<VkDescriptorSet>& descriptorSets);
 
 	void DestroyCommandPool();
+	void FreeCommandBuffers();
 
-	VkCommandPool& GetCommandPool() { return m_GraphicsComandPool; }
+	VkCommandPool& GetCommandPool()							{ return m_GraphicsComandPool; }
 	VkCommandBuffer& GetCommandBuffer(uint32_t const index) { return m_CommandBuffers[index]; }
-	std::vector<VkCommandBuffer>& GetCommandBuffers() { return m_CommandBuffers; }
+	std::vector<VkCommandBuffer>& GetCommandBuffers()		{ return m_CommandBuffers; }
 
 private:
-	MainDevice m_MainDevice;
-	GraphicPipeline m_GraphicPipeline;
-	VkRenderPass m_RenderPass;
-	VkCommandPool m_GraphicsComandPool;
+	MainDevice		m_MainDevice;
+
+	VkRenderPass	*m_RenderPass;
+	GraphicPipeline *m_GraphicPipeline;
+	
+	VkCommandPool	m_GraphicsComandPool;
 	std::vector<VkCommandBuffer> m_CommandBuffers;
 };

@@ -19,10 +19,11 @@ class SwapChainHandler
 {
 public:
 	SwapChainHandler();
-	SwapChainHandler(MainDevice& mainDevice, VkDevice& device, VkSurfaceKHR& surface, GLFWwindow* glfwWindow);
+	SwapChainHandler(MainDevice& mainDevice, VkSurfaceKHR& surface, GLFWwindow* glfwWindow, QueueFamilyIndices& queueFamilyIndices);
 
-	void CreateSwapChain(QueueFamilyIndices& t_QueueFamilyIndices);
-	void CreateFrameBuffers(VkRenderPass& renderPass, VkImageView& depthBufferImageView);
+	void CreateSwapChain();
+	void RecreateSwapChain();
+	void CreateFrameBuffers(VkImageView& depthBufferImageView);
 
 	VkSwapchainKHR* GetSwapChainData();
 	VkSwapchainKHR& GetSwapChain();
@@ -30,22 +31,26 @@ public:
 	void PushImage(SwapChainImage swapChainImge);
 	void PushFrameBuffer(VkFramebuffer frameBuffer);
 
+	void SetRenderPass(VkRenderPass* renderPass);
+	void IsRecreating(bool const status);
+
 	SwapChainImage* GetImage(uint32_t index);
 	VkImageView&	GetSwapChainImageView(uint32_t index);
 	VkFramebuffer&  GetFrameBuffer(uint32_t index);
 	std::vector<VkFramebuffer>& GetFrameBuffers();
 	
-	size_t NumOfSwapChainImages() const;
-	size_t NumOfFrameBuffers() const;
+	size_t SwapChainImagesSize() const;
+	size_t FrameBuffersSize() const;
 	void ResizeFrameBuffers();
 
 	uint32_t GetExtentWidth() const;
 	uint32_t GetExtentHeight() const;
 	VkExtent2D& GetExtent();
 
-	void DestroyFrameBuffers(VkDevice device);
-	void DestroySwapChainImages(VkDevice device);
-	void DestroySwapChain(VkDevice device);
+	void CleanUpSwapChain();
+	void DestroyFrameBuffers();
+	void DestroySwapChainImageViews();
+	void DestroySwapChain();
 
 	VkFormat& GetSwapChainImageFormat();
 
@@ -60,10 +65,14 @@ private:
 	VkExtent2D	 m_SwapChainExtent;		   // Extent da utilizzare per l'Image View (prelevato dalla creazione della SwapChain)
 
 private:
-	MainDevice		 m_MainDevice;
-	VkDevice		 m_VulkanDevice;
-	VkSurfaceKHR	 m_VulkanSurface;
-	GLFWwindow*		 m_GLFWwindow;
+	MainDevice			m_MainDevice;
+	VkSurfaceKHR		m_VulkanSurface;
+	GLFWwindow*			m_GLFWwindow;
+	QueueFamilyIndices  m_QueueFamilyIndices;
+
+	VkRenderPass*		m_RenderPass;
+
+	bool				m_IsRecreating = false;
 
 	VkSurfaceFormatKHR  ChooseBestSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
 	VkPresentModeKHR	ChooseBestPresentationMode(const std::vector<VkPresentModeKHR>& presentationModes);

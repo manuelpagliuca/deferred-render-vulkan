@@ -11,18 +11,20 @@ public:
 	RenderPassHandler();
 	RenderPassHandler(MainDevice& maindevice, SwapChainHandler& swapChainHandler);
 	
-	VkRenderPass& GetRenderPass() { return m_RenderPass; }
+	VkRenderPass* GetRenderPassReference() { return &m_RenderPass; }
+	VkRenderPass& GetRenderPass()		   { return m_RenderPass; }
 
-	void CreateRenderPass(MainDevice& maindevice, SwapChainHandler& swapChainHandler);
+	void CreateRenderPass();
 	void SetColourAttachment(VkFormat imageFormat);
-	void SetDepthAttachment(MainDevice mainDevice);
+	void SetDepthAttachment();
 	void SetSubpassDescription();
 	void SetSubpassDependencies();
 	
 	void DestroyRenderPass();
 
 private:
-	VkDevice m_LogicalDevice;
+	MainDevice				m_MainDevice;
+	SwapChainHandler		m_SwapChainHandler;
 	VkRenderPass			m_RenderPass = {};
 
 	VkAttachmentDescription m_ColourAttachment = {};
@@ -34,4 +36,3 @@ private:
 	VkSubpassDescription	m_SubpassDescription = {};
 	std::array<VkSubpassDependency, 2> m_SubpassDependencies = {};
 };
-

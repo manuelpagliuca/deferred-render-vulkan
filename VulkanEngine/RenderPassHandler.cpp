@@ -9,14 +9,15 @@ RenderPassHandler::RenderPassHandler()
 
 RenderPassHandler::RenderPassHandler(MainDevice& maindevice, SwapChainHandler& swapChainHandler)
 {
-	m_LogicalDevice = maindevice.LogicalDevice;
-	CreateRenderPass(maindevice, swapChainHandler);
+	m_MainDevice = maindevice;
+	m_SwapChainHandler = swapChainHandler;
+	CreateRenderPass();
 }
 
-void RenderPassHandler::CreateRenderPass(MainDevice& maindevice, SwapChainHandler& swapChainHandler)
+void RenderPassHandler::CreateRenderPass()
 {
-	SetColourAttachment(swapChainHandler.GetSwapChainImageFormat());
-	SetDepthAttachment(maindevice);
+	SetColourAttachment(m_SwapChainHandler.GetSwapChainImageFormat());
+	SetDepthAttachment();
 	SetSubpassDescription();
 	SetSubpassDependencies();
 
@@ -31,7 +32,7 @@ void RenderPassHandler::CreateRenderPass(MainDevice& maindevice, SwapChainHandle
 	renderPassCreateInfo.dependencyCount	= static_cast<uint32_t>(m_SubpassDependencies.size());  // Numero di Subpass Dependencies coinvolte
 	renderPassCreateInfo.pDependencies		= m_SubpassDependencies.data();							// Puntatore all'array/vector di Subpass Dependencies
 
-	VkResult res = vkCreateRenderPass(maindevice.LogicalDevice, &renderPassCreateInfo, nullptr, &m_RenderPass);
+	VkResult res = vkCreateRenderPass(m_MainDevice.LogicalDevice, &renderPassCreateInfo, nullptr, &m_RenderPass);
 
 	if (res != VK_SUCCESS)
 	{
@@ -42,7 +43,7 @@ void RenderPassHandler::CreateRenderPass(MainDevice& maindevice, SwapChainHandle
 void RenderPassHandler::SetColourAttachment(VkFormat imageFormat)
 {
 	/* Attachment del RenderPass */
-// Definizione del Layout iniziale e Layout finale del RenderPass
+	// Definizione del Layout iniziale e Layout finale del RenderPass
 	m_ColourAttachment.flags		  = 0;									// Proprietà addizionali degli attachment
 	m_ColourAttachment.format		  = imageFormat;						// Formato dell'immagini utilizzato nella SwapChain
 	m_ColourAttachment.samples		  = VK_SAMPLE_COUNT_1_BIT;				// Numero di samples da utilizzare per l'immagine (multisampling)
@@ -61,10 +62,10 @@ void RenderPassHandler::SetColourAttachment(VkFormat imageFormat)
 	m_ColourAttachment.finalLayout   = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;		// Layout delle immagini dopo il RenderPass, l'immagine avrà un formato presentabile
 }
 
-void RenderPassHandler::SetDepthAttachment(MainDevice mainDevice)
+void RenderPassHandler::SetDepthAttachment()
 {
 	std::vector<VkFormat> formats = { VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D24_UNORM_S8_UINT };
-	m_DepthAttachment.format			= Utility::ChooseSupportedFormat(mainDevice, formats, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+	m_DepthAttachment.format			= Utility::ChooseSupportedFormat(m_MainDevice, formats, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 	m_DepthAttachment.samples			= VK_SAMPLE_COUNT_1_BIT;
 	m_DepthAttachment.loadOp			= VK_ATTACHMENT_LOAD_OP_CLEAR;
 	m_DepthAttachment.storeOp			= VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -100,7 +101,7 @@ void RenderPassHandler::SetSubpassDependencies()
 
 void RenderPassHandler::DestroyRenderPass()
 {
-	vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, nullptr);
+	vkDestroyRenderPass(m_MainDevice.LogicalDevice, m_RenderPass, nullptr);
 }
 
 void RenderPassHandler::SetSubpassDescription()

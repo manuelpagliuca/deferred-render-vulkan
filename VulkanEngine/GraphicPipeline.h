@@ -8,7 +8,7 @@ class GraphicPipeline
 {
 public:
 	GraphicPipeline();
-	GraphicPipeline(MainDevice &mainDevice, SwapChainHandler& swapChainHandler, RenderPassHandler& renderPass, VkDescriptorSetLayout& descriptorSetLayout,
+	GraphicPipeline(MainDevice &mainDevice, SwapChainHandler& swapChainHandler, RenderPassHandler* renderPass, VkDescriptorSetLayout& descriptorSetLayout,
 		VkDescriptorSetLayout& textureObjects, VkPushConstantRange& pushCostantRange);
 
 	VkPipeline&		  GetPipeline()   { return m_GraphicsPipeline; }
@@ -39,12 +39,12 @@ public:
 	void DestroyPipeline();
 
 private:
-	MainDevice			  m_MainDevice;
-	SwapChainHandler	  m_SwapChainHandler;
-	RenderPassHandler	  m_RenderPassHandler;
-	VkDescriptorSetLayout m_DescriptorSetLayout;
-	VkDescriptorSetLayout m_TextureSetLayout;
-	VkPushConstantRange   m_PushCostantRange;
+	MainDevice				m_MainDevice;
+	SwapChainHandler		m_SwapChainHandler;
+	RenderPassHandler*		m_RenderPassHandler;
+	VkDescriptorSetLayout	m_DescriptorSetLayout;
+	VkDescriptorSetLayout	m_TextureSetLayout;
+	VkPushConstantRange		m_PushCostantRange;
 
 	const char* m_VertexShaderSPIRVPath   = "./Shaders/vert.spv";
 	const char* m_FragmentShaderSPIRVPath = "./Shaders/frag.spv";

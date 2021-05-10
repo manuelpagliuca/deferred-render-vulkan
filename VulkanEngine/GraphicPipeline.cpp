@@ -6,10 +6,10 @@ GraphicPipeline::GraphicPipeline()
 	m_MainDevice	    = {};
 	m_GraphicsPipeline  = 0;
 	m_PipelineLayout	= 0;
-	m_RenderPassHandler = RenderPassHandler();
+	m_RenderPassHandler = new RenderPassHandler();
 }
 
-GraphicPipeline::GraphicPipeline(MainDevice &mainDevice, SwapChainHandler& swapChainHandler, RenderPassHandler &renderPass,
+GraphicPipeline::GraphicPipeline(MainDevice &mainDevice, SwapChainHandler& swapChainHandler, RenderPassHandler * renderPass,
 	VkDescriptorSetLayout& descriptorSetLayout, VkDescriptorSetLayout& textureSetLayout, VkPushConstantRange& pushCostantRange)
 {
 	m_MainDevice			= mainDevice;
@@ -68,7 +68,7 @@ void GraphicPipeline::CreateGraphicPipeline()
 	pipelineCreateInfo.pColorBlendState			= &m_ColourBlendingStage;				// Colout Blending 
 	pipelineCreateInfo.pDepthStencilState		= &m_DepthStencilStage;					// Depth Stencil Test
 	pipelineCreateInfo.layout					= m_PipelineLayout;						// Pipeline Layout
-	pipelineCreateInfo.renderPass				= m_RenderPassHandler.GetRenderPass();	// RenderPass Stage
+	pipelineCreateInfo.renderPass				= *m_RenderPassHandler->GetRenderPassReference();	// RenderPass Stage
 	pipelineCreateInfo.subpass					= 0;									// Subpass utilizzati nel RenderPass
 	pipelineCreateInfo.basePipelineHandle		= VK_NULL_HANDLE;						// Pipeline da cui derivare
 	pipelineCreateInfo.basePipelineIndex		= -1;									// Indice della pipeline da cui derivare (in caso in cui siano passate molteplici)
@@ -287,5 +287,5 @@ void GraphicPipeline::DestroyPipeline()
 {
 	vkDestroyPipeline(m_MainDevice.LogicalDevice, m_GraphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(m_MainDevice.LogicalDevice, m_PipelineLayout, nullptr);
-	vkDestroyRenderPass(m_MainDevice.LogicalDevice, m_RenderPassHandler.GetRenderPass(), nullptr);
+	vkDestroyRenderPass(m_MainDevice.LogicalDevice, *(m_RenderPassHandler->GetRenderPassReference()), nullptr);
 }

@@ -2,6 +2,18 @@
 #include "Utilities.h"
 #include "DescriptorsHandler.h"
 
+DescriptorsHandler::DescriptorsHandler()
+{
+	m_ViewProjectionLayout  = {};
+	m_Device				= {};
+	m_ViewProjectionPool	= {};
+	m_ViewProjectionLayout	= {};
+	m_TexturePool			= {};
+	m_TextureLayout			= {};
+
+	std::vector<VkDescriptorSet> m_DescriptorSets = {};
+}
+
 DescriptorsHandler::DescriptorsHandler(VkDevice &device)
 {
 	m_Device = device;
