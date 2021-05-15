@@ -4,6 +4,21 @@ struct MainDevice {
 	VkDeviceSize	 MinUniformBufferOffset;
 };
 
+struct VulkanRenderData {
+	VkInstance			instance;
+	VkPhysicalDevice	physicalDevice;
+	VkDevice			device;
+	uint32_t			graphicQueueIndex;
+	VkQueue				graphicQueue;
+	VkDescriptorPool	imguiDescriptorPool;
+	uint32_t			minImageCount;
+	uint32_t			imageCount;
+
+	VkRenderPass		renderPass;
+	VkCommandPool		commandPool;
+	std::vector<VkCommandBuffer> commandBuffers;
+};
+
 struct TextureObjects {
 	std::vector<VkImage>		 TextureImages;
 	std::vector<VkDeviceMemory>  TextureImageMemory;
@@ -64,8 +79,8 @@ struct SubmissionSyncObjects {
 
 struct QueueFamilyIndices {
 
-	int GraphicsFamily	   = -1;
-	int PresentationFamily = -1;
+	uint32_t GraphicsFamily		= UINT_MAX;
+	uint32_t PresentationFamily = UINT_MAX;
 
 	bool isValid() const
 	{

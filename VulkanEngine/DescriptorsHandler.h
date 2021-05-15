@@ -8,9 +8,8 @@ public:
 	DescriptorsHandler();
 	DescriptorsHandler(VkDevice* device);
 
-	void CreateDescriptorPool(size_t numOfSwapImgs, size_t UBOsize);
-	void CreateViewProjectionDescriptorSetLayout();
-	void CreateTextureDescriptorSetLayout();
+	void CreateDescriptorPools(size_t numOfSwapImgs, size_t UBOsize);
+	void CreateSetLayouts();
 
 	void CreateDescriptorSets(std::vector<VkBuffer>& viewProjectionUBO, size_t dataSize, size_t numSwapChainImgs);
 
@@ -28,6 +27,14 @@ public:
 	void DestroyTextureLayout();
 	void DestroyViewProjectionLayout();
 	
+private:
+	void CreateViewProjectionPool(size_t numOfSwapImgs, size_t UBOsize);
+	void CreateTexturePool();
+	void CreateImguiPool();
+
+	void CreateViewProjectionDescriptorSetLayout();
+	void CreateTextureDescriptorSetLayout();
+
 private:
 	VkDevice *m_Device;
 

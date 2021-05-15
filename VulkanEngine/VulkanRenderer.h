@@ -25,18 +25,25 @@ public:
 	void Draw(ImDrawData * draw_data);
 	void Cleanup();
 
-	VkInstance& GetInstance() { return m_VulkanInstance; }
-	VkPhysicalDevice& GetPhysicalDevice() { return m_MainDevice.PhysicalDevice; }
-	VkDevice& GetLogicalDevice() { return m_MainDevice.LogicalDevice; }
-	QueueFamilyIndices& GetQueueFamiliesIndices() { return m_QueueFamilyIndices; }
-	VkQueue& GetGraphicQueue() { return m_GraphicsQueue; }
-	DescriptorsHandler& GetDescriptorHandler() { return m_DescriptorsHandler; }
-	SwapChainHandler& GetSwapChainHandler() { return m_SwapChainHandler; }
-	RenderPassHandler& GetRenderPassHandler() { return m_RenderPassHandler; }
-	CommandHandler& GetCommandHandler() { return m_CommandHandler; }
+	VulkanRenderData GetRenderData() {
+		VulkanRenderData data = {};
+		data.instance				= m_VulkanInstance;
+		data.physicalDevice			= m_MainDevice.PhysicalDevice;
+		data.device					= m_MainDevice.LogicalDevice;
+		data.graphicQueueIndex		= m_QueueFamilyIndices.GraphicsFamily;
+		data.graphicQueue			= m_GraphicsQueue;
+		data.imguiDescriptorPool	= m_DescriptorsHandler.GetImguiDescriptorPool();
+		data.minImageCount			= 3;	// setup correct practice
+		data.imageCount				= 3;
+		data.renderPass				= m_RenderPassHandler.GetRenderPass();
+		data.commandPool			= m_CommandHandler.GetCommandPool();
+		data.commandBuffers			= m_CommandHandler.GetCommandBuffers();
+
+		return data;
+	}
+
 	std::vector<SubmissionSyncObjects>& GetSyncObjects() { return m_SyncObjects; }
 	int GetCurrentFrameIdx() { return m_CurrentFrame; }
-
 
 private:
 	VkInstance			m_VulkanInstance;
@@ -48,8 +55,6 @@ private:
 	GraphicPipeline		m_GraphicPipeline;
 	CommandHandler		m_CommandHandler;
 	DescriptorsHandler	m_DescriptorsHandler;
-
-	GUI					m_RenderGUI;
 
 	const std::vector<const char*> m_RequestedDeviceExtensions =
 	{

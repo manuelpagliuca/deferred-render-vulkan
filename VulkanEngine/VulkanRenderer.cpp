@@ -37,8 +37,7 @@ int VulkanRenderer::Init(void* t_window)
 		m_SwapChainHandler	= SwapChainHandler(m_MainDevice, m_Surface, m_Window, m_QueueFamilyIndices);
 		m_SwapChainHandler.CreateSwapChain();
 
-		m_DescriptorsHandler.CreateViewProjectionDescriptorSetLayout();
-		m_DescriptorsHandler.CreateTextureDescriptorSetLayout();
+		m_DescriptorsHandler.CreateSetLayouts();
 
 		m_RenderPassHandler.CreateRenderPass();
 		
@@ -60,7 +59,7 @@ int VulkanRenderer::Init(void* t_window)
 
 		CreateUniformBuffers();
 
-		m_DescriptorsHandler.CreateDescriptorPool(m_SwapChainHandler.SwapChainImagesSize(), m_viewProjectionUBO.size());
+		m_DescriptorsHandler.CreateDescriptorPools(m_SwapChainHandler.SwapChainImagesSize(), m_viewProjectionUBO.size());
 		m_DescriptorsHandler.CreateDescriptorSets(m_viewProjectionUBO, sizeof(UboViewProjection), m_SwapChainHandler.SwapChainImagesSize());
 
 		CreateSynchronisation();
@@ -393,7 +392,7 @@ bool VulkanRenderer::CheckDeviceSuitable(VkPhysicalDevice possibleDevice)
 void VulkanRenderer::CreateLogicalDevice()
 {
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-	std::set<int> queueFamilyIndices = { m_QueueFamilyIndices.GraphicsFamily , m_QueueFamilyIndices.PresentationFamily };
+	std::set<uint32_t> queueFamilyIndices = { m_QueueFamilyIndices.GraphicsFamily , m_QueueFamilyIndices.PresentationFamily };
 
 	// DEVICE QUEUE (Queue utilizzate nel device logico)
 	for (int queueFamilyIndex : queueFamilyIndices)
@@ -559,7 +558,7 @@ void VulkanRenderer::Cleanup()
 	// quindi è corretto aspettare che il dispositivo sia inattivo prima di eliminare gli oggetti.
 	vkDeviceWaitIdle(m_MainDevice.LogicalDevice);
 
-	m_RenderGUI.Destroy();
+	GUI::GetInstance()->Destroy();
 
 	m_DescriptorsHandler.DestroyImguiDescriptorPool();
 

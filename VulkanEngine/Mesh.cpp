@@ -2,7 +2,6 @@
 
 #include "Mesh.h"
 
-// Crea la mesh partendo da "Vertex Data" e "Index Data"
 Mesh::Mesh(MainDevice &mainDevice,
 		   VkQueue transferQueue,
 		   VkCommandPool transferCommandPool,
@@ -58,8 +57,6 @@ void Mesh::createVertexBuffer(VkQueue transferQueue, VkCommandPool transferComma
 	// Copia lo staging buffer nel vertex buffer della GPU, è un operazione che viene effettuata attraverso
 	// i CommandBuffer. Ovvero che è veloce perchè viene eseguita dalla GPU.
 	Utility::CopyBuffer(m_MainDevice.LogicalDevice, transferQueue, transferCommandPool, staging_buffer, m_vertexBuffer, bufferSize);
-
-	// Distruzione dello StagingBuffer e liberazione della sua memoria
 	
 	vkDestroyBuffer(m_MainDevice.LogicalDevice, staging_buffer, nullptr);
 	vkFreeMemory(m_MainDevice.LogicalDevice, staging_buffer_memory, nullptr);
