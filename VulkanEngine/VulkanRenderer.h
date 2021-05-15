@@ -25,25 +25,8 @@ public:
 	void Draw(ImDrawData * draw_data);
 	void Cleanup();
 
-	VulkanRenderData GetRenderData() {
-		VulkanRenderData data = {};
-		data.instance				= m_VulkanInstance;
-		data.physicalDevice			= m_MainDevice.PhysicalDevice;
-		data.device					= m_MainDevice.LogicalDevice;
-		data.graphicQueueIndex		= m_QueueFamilyIndices.GraphicsFamily;
-		data.graphicQueue			= m_GraphicsQueue;
-		data.imguiDescriptorPool	= m_DescriptorsHandler.GetImguiDescriptorPool();
-		data.minImageCount			= 3;	// setup correct practice
-		data.imageCount				= 3;
-		data.renderPass				= m_RenderPassHandler.GetRenderPass();
-		data.commandPool			= m_CommandHandler.GetCommandPool();
-		data.commandBuffers			= m_CommandHandler.GetCommandBuffers();
-
-		return data;
-	}
-
-	std::vector<SubmissionSyncObjects>& GetSyncObjects() { return m_SyncObjects; }
-	int GetCurrentFrameIdx() { return m_CurrentFrame; }
+	const VulkanRenderData GetRenderData();
+	int const GetCurrentFrame() const;
 
 private:
 	VkInstance			m_VulkanInstance;
@@ -85,7 +68,7 @@ private:
 	UboViewProjection m_UBOViewProjection;
 
 	/* Core Renderer Functions */
-	void CreateRenderFoundations();
+	void CreateRenderKernel();
 	void CreateInstance();													
 	void RetrievePhysicalDevice();	
 	void CreateLogicalDevice();	

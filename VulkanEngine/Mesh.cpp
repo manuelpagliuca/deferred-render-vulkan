@@ -27,15 +27,16 @@ void Mesh::createVertexBuffer(VkQueue transferQueue, VkCommandPool transferComma
 	VkBuffer staging_buffer;
 	VkDeviceMemory staging_buffer_memory;
 
+	BufferSettings buffer_settings;
+	buffer_settings.size = bufferSize;
+	buffer_settings.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	buffer_settings.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
 	// Creazione dello Staging Buffer, la cui memoria è accedibile attraverso la CPU (buffer più lento)
 	// e verranno bypassate tutte le operazioni di caching standard.
 	// Il tipo del buffer è VK_BUFFER_USAGE_TRANSFER_SRC_BIT, significa che serve per effettuare un traferimento
 	// dei dati all'interno del buffer verso un altra locazione.
-	Utility::CreateBuffer(m_MainDevice,
-		bufferSize,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		&staging_buffer, &staging_buffer_memory);
+	Utility::CreateBuffer(m_MainDevice, buffer_settings, &staging_buffer, &staging_buffer_memory);
 
 	//  Mapping della memoria sul Vertex Buffer
 	void* data;																	 // 1. Creazione di un puntatore ad una locazione della memoria normale
@@ -47,12 +48,11 @@ void Mesh::createVertexBuffer(VkQueue transferQueue, VkCommandPool transferComma
 	// Il buffer è sia un buffer VK_BUFFER_USAGE_TRANSFER_DST_BIT
 	// ovvero che è creato per ricevere dei dati da un altra locazione di memoria (lo staging buffer), ma è anche
 	// VK_BUFFER_USAGE_VERTEX_BUFFER_BIT ovvero un buffer per i Vertex Data.
-	Utility::CreateBuffer(m_MainDevice,
-				 bufferSize,
-				 VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-				 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-				 &m_vertexBuffer,
-				 &m_vertexBufferMemory);
+	
+	buffer_settings.usage		= VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	buffer_settings.properties	= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+	Utility::CreateBuffer(m_MainDevice, buffer_settings, &m_vertexBuffer, &m_vertexBufferMemory);
 
 	// Copia lo staging buffer nel vertex buffer della GPU, è un operazione che viene effettuata attraverso
 	// i CommandBuffer. Ovvero che è veloce perchè viene eseguita dalla GPU.
@@ -69,11 +69,14 @@ void Mesh::createIndexBuffer(VkQueue transferQueue, VkCommandPool transferComman
 	VkBuffer staging_buffer;
 	VkDeviceMemory stagingBufferMemory;
 
-	Utility::CreateBuffer(m_MainDevice,
-		bufferSize,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		&staging_buffer, &stagingBufferMemory);
+	BufferSettings buffer_settings;
+	buffer_settings.size = bufferSize;
+	buffer_settings.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	buffer_settings.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+
+
+	Utility::CreateBuffer(m_MainDevice, buffer_settings, &staging_buffer, &stagingBufferMemory);
 
 	// Mapping della memoria per l'index buffer
 	void* data;
@@ -81,12 +84,11 @@ void Mesh::createIndexBuffer(VkQueue transferQueue, VkCommandPool transferComman
 	memcpy(data, indices->data(), static_cast<size_t>(bufferSize));			 // 3. Copio il vettore dei vertici in un punto in memoria
 	vkUnmapMemory(m_MainDevice.LogicalDevice, stagingBufferMemory);						 // 4. Disassocio il vertice dalla memoria
 
+	buffer_settings.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+	buffer_settings.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
 	// Creazione del buffer per Index Data sulla GPU
-	Utility::CreateBuffer(m_MainDevice,
-		bufferSize, 
-		VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		&m_indexBuffer, &m_indexBufferMemory);
+	Utility::CreateBuffer(m_MainDevice, buffer_settings, &m_indexBuffer, &m_indexBufferMemory);
 
 	// Copia dello staging buffer sulla GPU
 	Utility::CopyBuffer(m_MainDevice.LogicalDevice, transferQueue, transferCommandPool, staging_buffer, m_indexBuffer, bufferSize);

@@ -40,7 +40,9 @@ void Scene::LoadScene(std::vector<Mesh> &meshList, TextureObjects &textureObject
 		2, 3, 0
 	};
 
-	int giraffeTexture = Utility::CreateTexture(*m_MainDevice, m_DescriptorsHandler->GetTexturePool(), m_DescriptorsHandler->GetTextureDescriptorSetLayout(), textureObjects, *m_GraphicsQueue, m_CommandHandler->GetCommandPool(), "giraffe.jpg");
+	int giraffeTexture = Utility::CreateTexture(*m_MainDevice, m_DescriptorsHandler->GetTexturePool(),
+		m_DescriptorsHandler->GetTextureDescriptorSetLayout(),
+		textureObjects, *m_GraphicsQueue, m_CommandHandler->GetCommandPool(), "giraffe.jpg");
 
 	meshList.push_back(Mesh(
 		*m_MainDevice,

@@ -21,7 +21,7 @@ public:
 	static VkImage CreateImage(MainDevice &mainDevice, uint32_t width, uint32_t height, VkFormat format, 
 							   VkImageTiling tiling, VkImageUsageFlags useFlags, VkMemoryPropertyFlags propFlags, VkDeviceMemory* imageMemory);
 
-	static VkImageView CreateImageView(VkDevice& device, VkImage image, VkFormat format, VkImageAspectFlags aspetFlags);
+	static VkImageView CreateImageView(const VkDevice& logical_device, const VkImage& image, const VkFormat& format, const VkImageAspectFlags& aspect_flags);
 
 	static void CreateDepthBufferImage(DepthBufferImage& image, MainDevice& mainDevice, VkExtent2D imgExtent);
 
@@ -29,10 +29,10 @@ public:
 	static uint32_t FindMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t supportedMemoryTypes, VkMemoryPropertyFlags properties);
 	
 	/* BUFFERS */
-	static void CreateBuffer(MainDevice& mainDevice, VkDeviceSize bufferSize, VkBufferUsageFlags bufferUsage, VkMemoryAllocateFlags bufferProperties, VkBuffer* buffer, VkDeviceMemory* bufferMemory);
+	static void CreateBuffer(const MainDevice& mainDevice, const BufferSettings &buffer_settings, VkBuffer *data, VkDeviceMemory *memory);
 	static void CopyBuffer(VkDevice& logicalDevice, VkQueue& transferQueue, VkCommandPool& transferCommandPool, VkBuffer& srcBuffer, VkBuffer& dstBuffer, VkDeviceSize bufferSize);
 	static void CopyImageBuffer(VkDevice &device, VkQueue transferQueue, VkCommandPool transferCommandPool, VkBuffer src, VkImage image, uint32_t width, uint32_t height);
-	
+
 	/* DYNAMIC UBO (SE NECESSARIO FARE UNA CLASSE PER I D-UBO)*/
 	//static Model* AllocateDynamicBufferTransferSpace(VkDeviceSize minUniformBufferOffset);
 	//static void FreeAlignedMemoryDUBO(Model* modelTransferSpace);
@@ -51,7 +51,6 @@ public:
 	/* COMMAND BUFFER */
 	static VkCommandBuffer BeginCommandBuffer(VkDevice device, VkCommandPool commandPool);
 	static void EndAndSubmitCommandBuffer(VkDevice device, VkCommandPool commandPool, VkQueue queue, VkCommandBuffer commandBuffer);
-	static void TransitionImageLayout(VkDevice &device, VkQueue queue, VkCommandPool commandPool, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout);
 
 	/* SHADERS */
 	static VkShaderModule CreateShaderModule(VkDevice& device, const std::vector<char>& code);
@@ -64,6 +63,7 @@ public:
 		std::string fileName);
 	static int CreateTextureImage(MainDevice& mainDevice, TextureObjects& textureObjects, VkQueue& graphicsQueue, VkCommandPool& graphicsCommandPool, std::string fileName);
 	static stbi_uc* LoadTextureFile(std::string fileName, int* width, int* height, VkDeviceSize* imageSize);
+	static void TransitionImageLayout(VkDevice &device, VkQueue queue, VkCommandPool commandPool, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout);
 	
 	static int CreateTextureDescriptor(VkDevice& device, VkImageView textureImage, VkDescriptorPool& texturePool, VkDescriptorSetLayout& textureLayout, TextureObjects& textureObjects);
 

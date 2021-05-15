@@ -6,7 +6,6 @@
 
 std::vector<char> Utility::ReadFile(const std::string& filename)
 {
-	// Apre lo stream dal file fornito, come binario e partendo dal fondo
 	std::ifstream file(filename, std::ios::binary | std::ios::ate);
 
 	if (!file.is_open())
@@ -22,16 +21,15 @@ std::vector<char> Utility::ReadFile(const std::string& filename)
 	return fileBuffer;
 }
 
-void Utility::CreateBuffer(MainDevice &mainDevice, VkDeviceSize bufferSize, VkBufferUsageFlags bufferUsage,
-	VkMemoryAllocateFlags bufferProperties,	VkBuffer* buffer, VkDeviceMemory* bufferMemory)
+void Utility::CreateBuffer(const MainDevice& mainDevice, const BufferSettings& buffer_settings, VkBuffer* data, VkDeviceMemory* memory)
 {
 	VkBufferCreateInfo bufferInfo = {};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size		   = bufferSize;				// Dimensione del buffer
-	bufferInfo.usage	   = bufferUsage;				// Utilizzo del buffer (VertexBuffer, IndexBuffer, UniformBuffer, ...)
+	bufferInfo.size		   = buffer_settings.size;				// Dimensione del buffer
+	bufferInfo.usage	   = buffer_settings.usage;				// Utilizzo del buffer (VertexBuffer, IndexBuffer, UniformBuffer, ...)
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;	// Accesso alle immagini esclusivo alla Queue Family
 
-	VkResult result = vkCreateBuffer(mainDevice.LogicalDevice, &bufferInfo, nullptr, buffer);
+	VkResult result = vkCreateBuffer(mainDevice.LogicalDevice, &bufferInfo, nullptr, data);
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Vertex Buffer!");
@@ -39,19 +37,19 @@ void Utility::CreateBuffer(MainDevice &mainDevice, VkDeviceSize bufferSize, VkBu
 
 	// Query per i requisiti di memoria del buffer
 	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(mainDevice.LogicalDevice, *buffer, &memRequirements);
+	vkGetBufferMemoryRequirements(mainDevice.LogicalDevice, *data, &memRequirements);
 
 	// Informazioni per l'allocazione della memoria del buffer
 	VkMemoryAllocateInfo memoryAllocInfo = {};
 	memoryAllocInfo.sType		    = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memoryAllocInfo.allocationSize  = memRequirements.size;					// Dimensione dell'allocazione = Memoria richiesta per il buffer
-	memoryAllocInfo.memoryTypeIndex = Utility::FindMemoryTypeIndex(mainDevice.PhysicalDevice, memRequirements.memoryTypeBits, bufferProperties);
+	memoryAllocInfo.memoryTypeIndex = Utility::FindMemoryTypeIndex(mainDevice.PhysicalDevice, memRequirements.memoryTypeBits, buffer_settings.properties);
 
 	// VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT  : CPU può interagire con la memoria
 	// VK_MEMORY_PROPERTY_HOST_COHERENT_BIT : Permette il posizionamento dei dati direttamente nel buffer dopo il mapping
 	// (altrimenti ha bisogno di essere specificato manualmente)
 
-	result = vkAllocateMemory(mainDevice.LogicalDevice, &memoryAllocInfo, nullptr, bufferMemory);
+	result = vkAllocateMemory(mainDevice.LogicalDevice, &memoryAllocInfo, nullptr, memory);
 
 	if (result != VK_SUCCESS)
 	{
@@ -59,7 +57,7 @@ void Utility::CreateBuffer(MainDevice &mainDevice, VkDeviceSize bufferSize, VkBu
 	}
 
 	// Allocazione della memoria sul dato buffer
-	vkBindBufferMemory(mainDevice.LogicalDevice, *buffer, *bufferMemory, 0);
+	vkBindBufferMemory(mainDevice.LogicalDevice, *data, *memory, 0);
 }
 
 // Restituisce l'indice per il tipo di memoria desiderato, a partire dal tipo definito dal requisito di memoria
@@ -295,27 +293,27 @@ VkImage Utility::CreateImage(MainDevice &mainDevice, uint32_t width, uint32_t he
 	return image;
 }
 
-VkImageView Utility::CreateImageView(VkDevice& device, VkImage image, VkFormat format, VkImageAspectFlags aspetFlags)
+VkImageView Utility::CreateImageView(const VkDevice& logical_device, const VkImage& image, const VkFormat& format, const VkImageAspectFlags& aspect_flags)
 {
 	VkImageViewCreateInfo viewCreateInfo = {};
-	viewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewCreateInfo.image = image;									// Immagine pre-esistente nella SwapChain
-	viewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;					// Tipo delle immagini (2D)
-	viewCreateInfo.format = format;									// Formato delle immagini (stesso della Surface)
+	viewCreateInfo.sType		= VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewCreateInfo.image		= image;									// Immagine pre-esistente nella SwapChain
+	viewCreateInfo.viewType		= VK_IMAGE_VIEW_TYPE_2D;					// Tipo delle immagini (2D)
+	viewCreateInfo.format		= format;									// Formato delle immagini (stesso della Surface)
 	viewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;			// Imposto lo swizzle con il valore della componente effettiva
 	viewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 	viewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
 	viewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
 
 	// L'intervallo delle sottorisorse dicono all'ImageView quale parte dell'immagine visualizzare
-	viewCreateInfo.subresourceRange.aspectMask = aspetFlags; // Quale aspetto dell'immagine visualizzare (COLOR, DEPTH, STENCIL)
-	viewCreateInfo.subresourceRange.baseMipLevel = 0;			 // Livello iniziale della mipmap (primo mipmap level)
-	viewCreateInfo.subresourceRange.levelCount = 1;			 // Numero di livelli mipmap da visualizzare
-	viewCreateInfo.subresourceRange.baseArrayLayer = 0;			 // Livello iniziale del primo arrayLayer (primo arrayLayer)
-	viewCreateInfo.subresourceRange.layerCount = 1;			 // Numero di ArrayLayer
+	viewCreateInfo.subresourceRange.aspectMask		= aspect_flags; // Quale aspetto dell'immagine visualizzare (COLOR, DEPTH, STENCIL)
+	viewCreateInfo.subresourceRange.baseMipLevel	= 0;			 // Livello iniziale della mipmap (primo mipmap level)
+	viewCreateInfo.subresourceRange.levelCount		= 1;			 // Numero di livelli mipmap da visualizzare
+	viewCreateInfo.subresourceRange.baseArrayLayer	= 0;			 // Livello iniziale del primo arrayLayer (primo arrayLayer)
+	viewCreateInfo.subresourceRange.layerCount		= 1;			 // Numero di ArrayLayer
 
 	VkImageView imageView;
-	VkResult res = vkCreateImageView(device, &viewCreateInfo, nullptr, &imageView);
+	VkResult res = vkCreateImageView(logical_device, &viewCreateInfo, nullptr, &imageView);
 
 	if (res != VK_SUCCESS)
 	{
@@ -338,8 +336,6 @@ void Utility::CreateDepthBufferImage(DepthBufferImage& image, MainDevice &mainDe
 		image.Format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &image.Memory);
 
 	image.ImageView = Utility::CreateImageView(mainDevice.LogicalDevice, image.Image, image.Format, VK_IMAGE_ASPECT_DEPTH_BIT);
-
-
 }
 
 uint32_t Utility::FindMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t supportedMemoryTypes, VkMemoryPropertyFlags properties)
@@ -419,9 +415,14 @@ int Utility::CreateTextureImage(MainDevice& mainDevice, TextureObjects &textureO
 	// staging buffer
 	VkBuffer imageStaginBuffer;
 	VkDeviceMemory imageStagingBufferMemory;
-	CreateBuffer(mainDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		&imageStaginBuffer, &imageStagingBufferMemory);
+
+	BufferSettings buffer_settings;
+	buffer_settings.size = imageSize;
+	buffer_settings.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	buffer_settings.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+
+	CreateBuffer(mainDevice, buffer_settings, &imageStaginBuffer, &imageStagingBufferMemory);
 
 	// copy image data to staging buffer
 	void* data;

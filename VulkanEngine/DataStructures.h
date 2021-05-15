@@ -19,6 +19,21 @@ struct VulkanRenderData {
 	std::vector<VkCommandBuffer> commandBuffers;
 };
 
+struct ImageInfo {
+	uint32_t				width;
+	uint32_t				height;
+	VkFormat				format;
+	VkImageTiling			tiling;
+	VkImageUsageFlags		usage;
+	VkMemoryPropertyFlags	properties;
+};
+
+struct BufferSettings {
+	VkDeviceSize			size;
+	VkBufferUsageFlags		usage;
+	VkMemoryAllocateFlags	properties;
+};
+
 struct TextureObjects {
 	std::vector<VkImage>		 TextureImages;
 	std::vector<VkDeviceMemory>  TextureImageMemory;
