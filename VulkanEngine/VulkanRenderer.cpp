@@ -89,7 +89,7 @@ void VulkanRenderer::UpdateModel(int modelID, glm::mat4 newModel)
 //    prima dell'operazione di drawing
 // 3. Presenta l'immagine a schermo, dopo che il render è pronto.
 
-void VulkanRenderer::Draw()
+void VulkanRenderer::Draw(ImDrawData *draw_data)
 {
 	// Aspetta 1 Fence di essere nello stato di SIGNALED 
 	// Aspettare per il dato Fence il segnale dell'ultimo draw effettuato prima di continuare
@@ -106,7 +106,9 @@ void VulkanRenderer::Draw()
 						  std::numeric_limits<uint64_t>::max(),
 					      m_SyncObjects[m_CurrentFrame].ImageAvailable, VK_NULL_HANDLE, &imageIndex);
 
-	m_CommandHandler.RecordCommands(imageIndex, m_SwapChainHandler.GetExtent(), m_SwapChainHandler.GetFrameBuffers(), m_MeshList, m_TextureObjects, m_DescriptorsHandler.GetDescriptorSets());
+	
+	m_CommandHandler.RecordCommands(draw_data, imageIndex, m_SwapChainHandler.GetExtent(), m_SwapChainHandler.GetFrameBuffers(), m_MeshList, m_TextureObjects, m_DescriptorsHandler.GetDescriptorSets());
+	
 
 	// Copia nell'UniformBuffer della GPU le matrici m_uboViewProjection
 	UpdateUniformBuffers(imageIndex);
@@ -179,7 +181,6 @@ void VulkanRenderer::HandleMinimization()
 	}
 
 	vkDeviceWaitIdle(m_MainDevice.LogicalDevice);
-
 
 	m_CommandHandler.FreeCommandBuffers();
 
@@ -256,7 +257,7 @@ void VulkanRenderer::CreateRenderFoundations()
 {
 	CreateInstance();
 	CreateSurface();
-	GetPhysicalDevice();
+	RetrievePhysicalDevice();
 	CreateLogicalDevice();
 }
 
@@ -326,7 +327,7 @@ bool VulkanRenderer::CheckValidationLayerSupport(std::vector<const char*>* valid
 	return true;
 }
 
-void VulkanRenderer::GetPhysicalDevice()
+void VulkanRenderer::RetrievePhysicalDevice()
 {
 	uint32_t deviceCount = 0;
 
@@ -389,7 +390,6 @@ bool VulkanRenderer::CheckDeviceSuitable(VkPhysicalDevice possibleDevice)
 																					// 4. Supporta il sampler per l'anisotropy (basta controllare una volta che lo supporti la mia scheda video poi contrassegno l'esistenza nel createLogicalDevice)
 }
 
-// Crea il dispositivo logico
 void VulkanRenderer::CreateLogicalDevice()
 {
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
@@ -418,9 +418,9 @@ void VulkanRenderer::CreateLogicalDevice()
 	
 	// Informazioni rispetto ai servizi che offre il dispositvo (GEFORCE 1070 STRIX supporto l'anisotropy)
 	VkPhysicalDeviceFeatures deviceFeatures = {};
-	deviceFeatures.samplerAnisotropy = VK_TRUE;
+	deviceFeatures.samplerAnisotropy	= VK_TRUE;
 
-	deviceCreateInfo.pEnabledFeatures		 = &deviceFeatures;					// Features del dispositivo fisico che verranno utilizzate nel device logico (al momento nessuna).
+	deviceCreateInfo.pEnabledFeatures	= &deviceFeatures;					// Features del dispositivo fisico che verranno utilizzate nel device logico (al momento nessuna).
 
 
 	
@@ -449,7 +449,9 @@ void VulkanRenderer::CreateSurface()
 	VkResult res = glfwCreateWindowSurface(m_VulkanInstance, m_Window, nullptr, &m_Surface);
 																		
 	if (res != VK_SUCCESS)
+	{
 		throw std::runtime_error("Failed to create the surface!");
+	}
 }
 
 void VulkanRenderer::CreateSynchronisation()
@@ -557,6 +559,10 @@ void VulkanRenderer::Cleanup()
 	// quindi è corretto aspettare che il dispositivo sia inattivo prima di eliminare gli oggetti.
 	vkDeviceWaitIdle(m_MainDevice.LogicalDevice);
 
+	m_RenderGUI.Destroy();
+
+	m_DescriptorsHandler.DestroyImguiDescriptorPool();
+
 	m_DescriptorsHandler.DestroyTexturePool();
 	m_DescriptorsHandler.DestroyTextureLayout();
 
@@ -570,6 +576,12 @@ void VulkanRenderer::Cleanup()
 	}
 
 	m_DepthBufferImage.DestroyAndFree(m_MainDevice);
+
+	for (size_t i = 0; i < m_viewProjectionUBO.size(); ++i)
+	{
+		vkDestroyBuffer(m_MainDevice.LogicalDevice, m_viewProjectionUBO[i], nullptr);
+		vkFreeMemory(m_MainDevice.LogicalDevice, m_viewProjectionUniformBufferMemory[i], nullptr);
+	}
 
 	m_DescriptorsHandler.DestroyViewProjectionPool();
 	m_DescriptorsHandler.DestroyViewProjectionLayout();

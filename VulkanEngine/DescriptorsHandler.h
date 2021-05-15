@@ -16,14 +16,18 @@ public:
 
 	VkDescriptorSetLayout& GetViewProjectionDescriptorSetLayout();
 	VkDescriptorSetLayout& GetTextureDescriptorSetLayout();
+	VkDescriptorPool& GetVpPool();
+	VkDescriptorPool& GetImguiDescriptorPool();
 	VkDescriptorPool& GetTexturePool();
 	std::vector<VkDescriptorSet>& GetDescriptorSets();
 
 	void DestroyTexturePool();
-	void DestroyTextureLayout();
 	void DestroyViewProjectionPool();
-	void DestroyViewProjectionLayout();
+	void DestroyImguiDescriptorPool();
 
+	void DestroyTextureLayout();
+	void DestroyViewProjectionLayout();
+	
 private:
 	VkDevice *m_Device;
 
@@ -33,6 +37,7 @@ private:
 	VkDescriptorPool	  m_TexturePool;
 	VkDescriptorSetLayout m_TextureLayout;
 
-	std::vector<VkDescriptorSet> m_DescriptorSets;
+	VkDescriptorPool m_ImguiDescriptorPool;
 
+	std::vector<VkDescriptorSet> m_DescriptorSets;
 };

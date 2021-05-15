@@ -12,6 +12,7 @@
 #include "CommandHandler.h"
 #include "DescriptorsHandler.h"
 #include "Scene.h"
+#include "GUI.h"
 
 class VulkanRenderer
 {
@@ -21,8 +22,21 @@ public:
 
 	int Init(void* newWindow);
 	void UpdateModel(int modelID, glm::mat4 newModel);
-	void Draw();
+	void Draw(ImDrawData * draw_data);
 	void Cleanup();
+
+	VkInstance& GetInstance() { return m_VulkanInstance; }
+	VkPhysicalDevice& GetPhysicalDevice() { return m_MainDevice.PhysicalDevice; }
+	VkDevice& GetLogicalDevice() { return m_MainDevice.LogicalDevice; }
+	QueueFamilyIndices& GetQueueFamiliesIndices() { return m_QueueFamilyIndices; }
+	VkQueue& GetGraphicQueue() { return m_GraphicsQueue; }
+	DescriptorsHandler& GetDescriptorHandler() { return m_DescriptorsHandler; }
+	SwapChainHandler& GetSwapChainHandler() { return m_SwapChainHandler; }
+	RenderPassHandler& GetRenderPassHandler() { return m_RenderPassHandler; }
+	CommandHandler& GetCommandHandler() { return m_CommandHandler; }
+	std::vector<SubmissionSyncObjects>& GetSyncObjects() { return m_SyncObjects; }
+	int GetCurrentFrameIdx() { return m_CurrentFrame; }
+
 
 private:
 	VkInstance			m_VulkanInstance;
@@ -35,9 +49,11 @@ private:
 	CommandHandler		m_CommandHandler;
 	DescriptorsHandler	m_DescriptorsHandler;
 
+	GUI					m_RenderGUI;
+
 	const std::vector<const char*> m_RequestedDeviceExtensions =
 	{
-		VK_KHR_SWAPCHAIN_EXTENSION_NAME		// SwapChain Extension
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME
 	};
 
 	int	m_CurrentFrame   = 0;	    
@@ -56,6 +72,7 @@ private:
 	VkPushConstantRange			 m_PushCostantRange;
 
 	std::vector<SubmissionSyncObjects> m_SyncObjects;
+
 	Scene m_Scene;
 
 private:
@@ -65,7 +82,7 @@ private:
 	/* Core Renderer Functions */
 	void CreateRenderFoundations();
 	void CreateInstance();													
-	void GetPhysicalDevice();	
+	void RetrievePhysicalDevice();	
 	void CreateLogicalDevice();	
 	void CreateSurface();
 	void CreateSynchronisation();

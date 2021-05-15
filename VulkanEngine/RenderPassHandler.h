@@ -17,6 +17,7 @@ public:
 	void CreateRenderPass();
 	void SetColourAttachment(VkFormat imageFormat);
 	void SetDepthAttachment();
+
 	void SetSubpassDescription();
 	void SetSubpassDependencies();
 	
@@ -26,6 +27,7 @@ private:
 	MainDevice				*m_MainDevice;
 	SwapChainHandler		*m_SwapChainHandler;
 	VkRenderPass			m_RenderPass = {};
+	
 
 	VkAttachmentDescription m_ColourAttachment = {};
 	VkAttachmentDescription m_DepthAttachment  = {};

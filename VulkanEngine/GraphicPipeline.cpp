@@ -285,5 +285,4 @@ void GraphicPipeline::DestroyPipeline()
 {
 	vkDestroyPipeline(m_MainDevice.LogicalDevice, m_GraphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(m_MainDevice.LogicalDevice, m_PipelineLayout, nullptr);
-	vkDestroyRenderPass(m_MainDevice.LogicalDevice, *(m_RenderPassHandler->GetRenderPassReference()), nullptr);
 }

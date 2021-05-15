@@ -1,5 +1,6 @@
 #include "pch.h"
 
+
 #include "CommandHandler.h"
 
 CommandHandler::CommandHandler()
@@ -29,12 +30,9 @@ void CommandHandler::CreateCommandPool(QueueFamilyIndices &queueIndices)
 	VkResult res = vkCreateCommandPool(m_MainDevice.LogicalDevice, &poolInfo, nullptr, &m_GraphicsComandPool);
 
 	if (res != VK_SUCCESS)
-	{
 		throw std::runtime_error("Failed to create a Command Pool!");
-	}
 }
 
-// Allocazione dei Command Buffers (gruppi di comandi da inviare alle queues)
 void CommandHandler::CreateCommandBuffers(size_t const numFrameBuffers)
 {
 	m_CommandBuffers.resize(numFrameBuffers);
@@ -50,12 +48,10 @@ void CommandHandler::CreateCommandBuffers(size_t const numFrameBuffers)
 	VkResult res = vkAllocateCommandBuffers(m_MainDevice.LogicalDevice, &cbAllocInfo, m_CommandBuffers.data());
 
 	if (res != VK_SUCCESS)
-	{
 		throw std::runtime_error("Failed to allocate Command Buffers!");
-	}
 }
 
-void CommandHandler::RecordCommands(uint32_t currentImage, VkExtent2D &imageExtent, std::vector<VkFramebuffer> &frameBuffers, 
+void CommandHandler::RecordCommands(ImDrawData* draw_data, uint32_t currentImage, VkExtent2D &imageExtent, std::vector<VkFramebuffer> &frameBuffers,
 	std::vector<Mesh> &meshList, TextureObjects & textureObjects, std::vector<VkDescriptorSet> &descriptorSets)
 {
 	// Informazioni sul come inizializzare ogni Command Buffer
@@ -85,19 +81,17 @@ void CommandHandler::RecordCommands(uint32_t currentImage, VkExtent2D &imageExte
 	VkResult res = vkBeginCommandBuffer(m_CommandBuffers[currentImage], &bufferBeginInfo);
 
 	if (res != VK_SUCCESS)
-	{
 		throw std::runtime_error("Failed to start recording a Command Buffer!");
-	}
 
 	// Inizio del RenderPass
 	// VK_SUBPASS_CONTENTS_INLINE indica che tutti i comandi verranno registrati direttamente sul CommandBuffer primario
 	// e che il CommandBuffer secondario non debba essere eseguito all'interno del Subpass
 	vkCmdBeginRenderPass(m_CommandBuffers[currentImage], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+
 	// Binding della Pipeline Grafica ad un Command Buffer.
 	// VK_PIPELINE_BIND_POINT_GRAPHICS, indica il tipo Binding Point della Pipeline (in questo grafico per la grafica).
 	// (È possibile impostare molteplici pipeline e switchare, per esempio una versione DEFERRED o WIREFRAME)
-
 	vkCmdBindPipeline(m_CommandBuffers[currentImage], VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicPipeline->GetPipeline());
 
 	for (size_t j = 0; j < meshList.size(); ++j)
@@ -127,10 +121,10 @@ void CommandHandler::RecordCommands(uint32_t currentImage, VkExtent2D &imageExte
 		vkCmdDrawIndexed(m_CommandBuffers[currentImage], meshList[j].getIndexCount(), 1, 0, 0, 0);
 	}
 
-	// Termine del Render Pass
+	ImGui_ImplVulkan_RenderDrawData(draw_data, m_CommandBuffers[currentImage]);
+
 	vkCmdEndRenderPass(m_CommandBuffers[currentImage]);
 
-	// Termian la registrazione dei comandi
 	res = vkEndCommandBuffer(m_CommandBuffers[currentImage]);
 
 	if (res != VK_SUCCESS)

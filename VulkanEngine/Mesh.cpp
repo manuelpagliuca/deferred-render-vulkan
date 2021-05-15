@@ -21,15 +21,12 @@ Mesh::Mesh(MainDevice &mainDevice,
 	m_texID = newTexID;
 }
 
-// Creazione del VertexBuffer
 void Mesh::createVertexBuffer(VkQueue transferQueue, VkCommandPool transferCommandPool, std::vector<Vertex>* vertices)
 {
-	// Dimesione in byte del Vertex Buffer
 	VkDeviceSize bufferSize = sizeof(Vertex) * vertices->size();
 
-	// Buffer temporaneo tra il buffer della CPU ed il buffer GPU
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
+	VkBuffer staging_buffer;
+	VkDeviceMemory staging_buffer_memory;
 
 	// Creazione dello Staging Buffer, la cui memoria è accedibile attraverso la CPU (buffer più lento)
 	// e verranno bypassate tutte le operazioni di caching standard.
@@ -39,13 +36,13 @@ void Mesh::createVertexBuffer(VkQueue transferQueue, VkCommandPool transferComma
 		bufferSize,
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		&stagingBuffer, &stagingBufferMemory);
+		&staging_buffer, &staging_buffer_memory);
 
 	//  Mapping della memoria sul Vertex Buffer
 	void* data;																	 // 1. Creazione di un puntatore ad una locazione della memoria normale
-	vkMapMemory(m_MainDevice.LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);  // 2. mapping tra la memoria del Vertex Buffer ed il pointer lato host
+	vkMapMemory(m_MainDevice.LogicalDevice, staging_buffer_memory, 0, bufferSize, 0, &data);  // 2. mapping tra la memoria del Vertex Buffer ed il pointer lato host
 	memcpy(data, vertices->data(), static_cast<size_t>(bufferSize));			 // 3. Copio i Vertex Data nel buffer della GPU
-	vkUnmapMemory(m_MainDevice.LogicalDevice, stagingBufferMemory);						 // 4. Disassocio il vertice dalla memoria
+	vkUnmapMemory(m_MainDevice.LogicalDevice, staging_buffer_memory);						 // 4. Disassocio il vertice dalla memoria
 
 	// Creazione di un buffer accessibile solo dalla GPU (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT).
 	// Il buffer è sia un buffer VK_BUFFER_USAGE_TRANSFER_DST_BIT
@@ -60,29 +57,26 @@ void Mesh::createVertexBuffer(VkQueue transferQueue, VkCommandPool transferComma
 
 	// Copia lo staging buffer nel vertex buffer della GPU, è un operazione che viene effettuata attraverso
 	// i CommandBuffer. Ovvero che è veloce perchè viene eseguita dalla GPU.
-	Utility::CopyBuffer(m_MainDevice.LogicalDevice, transferQueue, transferCommandPool, stagingBuffer, m_vertexBuffer, bufferSize);
+	Utility::CopyBuffer(m_MainDevice.LogicalDevice, transferQueue, transferCommandPool, staging_buffer, m_vertexBuffer, bufferSize);
 
 	// Distruzione dello StagingBuffer e liberazione della sua memoria
-	vkDestroyBuffer(m_MainDevice.LogicalDevice, stagingBuffer, nullptr);
-	vkFreeMemory(m_MainDevice.LogicalDevice, stagingBufferMemory, nullptr);
+	
+	vkDestroyBuffer(m_MainDevice.LogicalDevice, staging_buffer, nullptr);
+	vkFreeMemory(m_MainDevice.LogicalDevice, staging_buffer_memory, nullptr);
 }
 
 void Mesh::createIndexBuffer(VkQueue transferQueue, VkCommandPool transferCommandPool, std::vector<uint32_t>* indices)
 {
-	// Prende la dimensione del buffer necessaria per gli indici
 	VkDeviceSize bufferSize = sizeof(uint32_t) * indices->size();
 
-	// Buffer temporaneo per lo stae dei vertex data prima del trasferimento nella GPU
-	VkBuffer stagingBuffer;
+	VkBuffer staging_buffer;
 	VkDeviceMemory stagingBufferMemory;
 
-	// Creazione dello Staging Buffer ed allocazione della memoria in esso
-	// Buffer per dati che devono essere trasferiti da qualche altra parte+
 	Utility::CreateBuffer(m_MainDevice,
 		bufferSize,
 		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		&stagingBuffer, &stagingBufferMemory);
+		&staging_buffer, &stagingBufferMemory);
 
 	// Mapping della memoria per l'index buffer
 	void* data;
@@ -98,10 +92,10 @@ void Mesh::createIndexBuffer(VkQueue transferQueue, VkCommandPool transferComman
 		&m_indexBuffer, &m_indexBufferMemory);
 
 	// Copia dello staging buffer sulla GPU
-	Utility::CopyBuffer(m_MainDevice.LogicalDevice, transferQueue, transferCommandPool, stagingBuffer, m_indexBuffer, bufferSize);
+	Utility::CopyBuffer(m_MainDevice.LogicalDevice, transferQueue, transferCommandPool, staging_buffer, m_indexBuffer, bufferSize);
 
 	// Distruzione dello staging Buffer
-	vkDestroyBuffer(m_MainDevice.LogicalDevice, stagingBuffer, nullptr);
+	vkDestroyBuffer(m_MainDevice.LogicalDevice, staging_buffer, nullptr);
 	vkFreeMemory(m_MainDevice.LogicalDevice, stagingBufferMemory, nullptr);
 }
 

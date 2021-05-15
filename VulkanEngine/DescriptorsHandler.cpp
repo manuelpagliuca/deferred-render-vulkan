@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Utilities.h"
 #include "DescriptorsHandler.h"
+#include "imgui.h"
 
 DescriptorsHandler::DescriptorsHandler()
 {
@@ -43,9 +44,9 @@ void DescriptorsHandler::CreateDescriptorPool(size_t numOfSwapImgs, size_t UBOsi
 	poolCreateInfo.pPoolSizes = descriptorPoolSizes.data();		// Array di pool size
 
 	// Creazione della Descriptor Pool
-	VkResult res = vkCreateDescriptorPool(*m_Device, &poolCreateInfo, nullptr, &m_ViewProjectionPool);
+	VkResult result = vkCreateDescriptorPool(*m_Device, &poolCreateInfo, nullptr, &m_ViewProjectionPool);
 
-	if (res != VK_SUCCESS)
+	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Descriptor Pool!");
 	}
@@ -62,7 +63,36 @@ void DescriptorsHandler::CreateDescriptorPool(size_t numOfSwapImgs, size_t UBOsi
 	samplerPoolCreateInfo.poolSizeCount = 1;
 	samplerPoolCreateInfo.pPoolSizes = &samplerPoolSize;
 
-	VkResult result = vkCreateDescriptorPool(*m_Device, &samplerPoolCreateInfo, nullptr, &m_TexturePool);
+	result = vkCreateDescriptorPool(*m_Device, &samplerPoolCreateInfo, nullptr, &m_TexturePool);
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create a Descriptor Pool!");
+	}
+
+	/* IMGUI DESCRIPTOR POOL */
+	VkDescriptorPoolSize imguiPoolSize[] =
+	{
+		{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+	};
+
+	VkDescriptorPoolCreateInfo imgui_pool = {};
+	imgui_pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	imgui_pool.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	imgui_pool.maxSets = 1000 * IM_ARRAYSIZE(imguiPoolSize);
+	imgui_pool.poolSizeCount = (uint32_t)IM_ARRAYSIZE(imguiPoolSize);
+	imgui_pool.pPoolSizes = imguiPoolSize;
+
+	result = vkCreateDescriptorPool(*m_Device, &imgui_pool, nullptr, &m_ImguiDescriptorPool);
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Descriptor Pool!");
@@ -130,12 +160,11 @@ void DescriptorsHandler::CreateDescriptorSets(std::vector<VkBuffer> & viewProjec
 	// Lista di tutti i possibili layour che useremo dal set (?) non capito TODO
 	std::vector<VkDescriptorSetLayout> setLayouts(numSwapChainImgs, m_ViewProjectionLayout);
 
-	// Informazioni per l'allocazione del descriptor set
 	VkDescriptorSetAllocateInfo setAllocInfo = {};
-	setAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	setAllocInfo.descriptorPool = m_ViewProjectionPool;								 // Pool per l'allocazione dei Descriptor Set
+	setAllocInfo.sType				= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	setAllocInfo.descriptorPool		= m_ViewProjectionPool;								 // Pool per l'allocazione dei Descriptor Set
 	setAllocInfo.descriptorSetCount = static_cast<uint32_t>(numSwapChainImgs); // Quanti Descriptor Set allocare
-	setAllocInfo.pSetLayouts = setLayouts.data();							 // Layout da utilizzare per allocare i set (1:1)
+	setAllocInfo.pSetLayouts		= setLayouts.data();							 // Layout da utilizzare per allocare i set (1:1)
 
 	// Allocazione dei descriptor sets (molteplici)
 	VkResult res = vkAllocateDescriptorSets(*m_Device, &setAllocInfo, m_DescriptorSets.data());
@@ -149,8 +178,6 @@ void DescriptorsHandler::CreateDescriptorSets(std::vector<VkBuffer> & viewProjec
 	for (size_t i = 0; i < numSwapChainImgs; ++i)
 	{
 		// VIEW-PROJECTION DESCRIPTOR
-
-
 		VkDescriptorBufferInfo vpBufferInfo = {};
 		vpBufferInfo.buffer = viewProjectionUBO[i];		// Buffer da cui prendere i dati
 		vpBufferInfo.offset = 0;							// Offset da cui partire
@@ -198,6 +225,16 @@ VkDescriptorSetLayout& DescriptorsHandler::GetTextureDescriptorSetLayout()
 	return m_TextureLayout;
 }
 
+VkDescriptorPool& DescriptorsHandler::GetVpPool()
+{
+	return m_ViewProjectionPool;
+}
+
+VkDescriptorPool& DescriptorsHandler::GetImguiDescriptorPool()
+{
+	return m_ImguiDescriptorPool;
+}
+
 VkDescriptorPool& DescriptorsHandler::GetTexturePool()
 {
 	return m_TexturePool;
@@ -226,4 +263,9 @@ void DescriptorsHandler::DestroyViewProjectionPool()
 void DescriptorsHandler::DestroyViewProjectionLayout()
 {
 	vkDestroyDescriptorSetLayout(*m_Device, m_ViewProjectionLayout, nullptr);
+}
+
+void DescriptorsHandler::DestroyImguiDescriptorPool()
+{
+	vkDestroyDescriptorPool(*m_Device, m_ImguiDescriptorPool, nullptr);
 }
