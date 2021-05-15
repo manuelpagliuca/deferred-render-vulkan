@@ -1,7 +1,6 @@
 #include "pch.h"
 #include "Utilities.h"
 #include "DescriptorsHandler.h"
-#include "imgui.h"
 
 DescriptorsHandler::DescriptorsHandler()
 {

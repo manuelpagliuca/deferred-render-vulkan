@@ -3,34 +3,30 @@
 #include "pch.h"
 
 #include "Mesh.h"
-#include <stb_image.h>
 
-const int MAX_FRAMES_IN_FLIGHT = 3;
-const int MAX_OBJECTS = 20;
+int constexpr MAX_FRAMES_IN_FLIGHT = 3;
+int constexpr MAX_OBJECTS = 20;
 
 class Utility
 {
 public:
 	/* GENERIC */
 	static std::vector<char> ReadFile(const std::string& filename);
-	static VkFormat ChooseSupportedFormat(MainDevice& mainDevice, const std::vector<VkFormat>& formats, VkImageTiling tiling, VkFormatFeatureFlags featureFlags);
-	static void GetQueueFamilyIndices(VkPhysicalDevice &physicalDevice, VkSurfaceKHR& surface, QueueFamilyIndices& queueFamilyIndices);
-	static bool CheckDeviceExtensionSupport(VkPhysicalDevice& device, const std::vector<const char*>& requestedDeviceExtensions);
+	static VkFormat ChooseSupportedFormat(const MainDevice& main_device, const std::vector<VkFormat>& formats, const VkImageTiling &tiling, const VkFormatFeatureFlags &feature_flags);
+	static void GetQueueFamilyIndices(const VkPhysicalDevice &physical_device, const VkSurfaceKHR& surface, QueueFamilyIndices& queue_family_indices);
+	static bool CheckDeviceExtensionSupport(const VkPhysicalDevice& device, const std::vector<const char*>& requested_device_extensions);
 
 	/* IMAGES */
-	static VkImage CreateImage(MainDevice &mainDevice, uint32_t width, uint32_t height, VkFormat format, 
-							   VkImageTiling tiling, VkImageUsageFlags useFlags, VkMemoryPropertyFlags propFlags, VkDeviceMemory* imageMemory);
-
+	static VkImage CreateImage(const MainDevice &main_device, const ImageInfo& image_info, VkDeviceMemory* image_memory);
 	static VkImageView CreateImageView(const VkDevice& logical_device, const VkImage& image, const VkFormat& format, const VkImageAspectFlags& aspect_flags);
-
-	static void CreateDepthBufferImage(DepthBufferImage& image, MainDevice& mainDevice, VkExtent2D imgExtent);
+	static void CreateDepthBufferImage(DepthBufferImage& image, const MainDevice& main_device, const VkExtent2D &img_extent);
 
 	/* MEMORY */
 	static uint32_t FindMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t supportedMemoryTypes, VkMemoryPropertyFlags properties);
 	
 	/* BUFFERS */
-	static void CreateBuffer(const MainDevice& mainDevice, const BufferSettings &buffer_settings, VkBuffer *data, VkDeviceMemory *memory);
-	static void CopyBuffer(VkDevice& logicalDevice, VkQueue& transferQueue, VkCommandPool& transferCommandPool, VkBuffer& srcBuffer, VkBuffer& dstBuffer, VkDeviceSize bufferSize);
+	static void CreateBuffer(const MainDevice& main_device, const BufferSettings &buffer_settings, VkBuffer *data, VkDeviceMemory *memory);
+	static void CopyBufferCmd(const VkDevice& logical_device, const VkQueue& transfer_queue, const VkCommandPool& transfer_command_pool, const VkBuffer& src_buffer, const VkBuffer& dst_buffer, const VkDeviceSize &buffer_size);
 	static void CopyImageBuffer(VkDevice &device, VkQueue transferQueue, VkCommandPool transferCommandPool, VkBuffer src, VkImage image, uint32_t width, uint32_t height);
 
 	/* DYNAMIC UBO (SE NECESSARIO FARE UNA CLASSE PER I D-UBO)*/
@@ -49,23 +45,25 @@ public:
 
 
 	/* COMMAND BUFFER */
-	static VkCommandBuffer BeginCommandBuffer(VkDevice device, VkCommandPool commandPool);
-	static void EndAndSubmitCommandBuffer(VkDevice device, VkCommandPool commandPool, VkQueue queue, VkCommandBuffer commandBuffer);
+	static VkCommandBuffer BeginCommandBuffer(const VkDevice& device, const VkCommandPool& commandPool);
+	static void EndAndSubmitCommandBuffer(const VkDevice& device, const VkCommandPool& command_pool, const VkQueue& queue, const VkCommandBuffer& command_buffer);
 
 	/* SHADERS */
-	static VkShaderModule CreateShaderModule(VkDevice& device, const std::vector<char>& code);
+	static VkShaderModule CreateShaderModule(const VkDevice& device, const std::vector<char>& code);
 
 	/* TEXTURE */
 	static int CreateTexture(
-		MainDevice& mainDevice, VkDescriptorPool& texturePool, VkDescriptorSetLayout& textureLayout,
-		TextureObjects& textureObjects, VkQueue& graphicsQueue,
-		VkCommandPool& graphicsCommandPool,
+		MainDevice& main_device, VkDescriptorPool& texture_pool, VkDescriptorSetLayout& texture_layout,
+		TextureObjects& texture_objects, VkQueue& graphics_queue,
+		VkCommandPool& graphics_command_pool,
 		std::string fileName);
 	static int CreateTextureImage(MainDevice& mainDevice, TextureObjects& textureObjects, VkQueue& graphicsQueue, VkCommandPool& graphicsCommandPool, std::string fileName);
-	static stbi_uc* LoadTextureFile(std::string fileName, int* width, int* height, VkDeviceSize* imageSize);
-	static void TransitionImageLayout(VkDevice &device, VkQueue queue, VkCommandPool commandPool, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout);
+	static stbi_uc* LoadTextureFile(const std::string &fileName, int* width, int* height, VkDeviceSize* imageSize);
+	static void TransitionImageLayout(const VkDevice& device, const VkQueue& queue, const VkCommandPool& command_pool, 
+		const VkImage& image, const VkImageLayout& old_layout,	const VkImageLayout& new_layout);
 	
-	static int CreateTextureDescriptor(VkDevice& device, VkImageView textureImage, VkDescriptorPool& texturePool, VkDescriptorSetLayout& textureLayout, TextureObjects& textureObjects);
+	static int CreateTextureDescriptor(const VkDevice& device, const VkImageView &textureImage, const VkDescriptorPool& texturePool,
+		const VkDescriptorSetLayout& textureLayout, TextureObjects& textureObjects);
 
 private:
 	Utility();

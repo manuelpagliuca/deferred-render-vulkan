@@ -74,7 +74,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Vendor\GLFW\include;C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)Vendor\GLM\;$(SolutionDir)Vendor\STB_IMAGE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Vendor\GLFW\include;C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)Vendor\GLM\;$(SolutionDir)Vendor\STB_IMAGE;$(SolutionDir)Vendor\IMGUI;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>ENABLED_VALIDATION_LAYERS;</UndefinePreprocessorDefinitions>
     </ClCompile>
     <Link>
@@ -137,6 +137,7 @@
     <ClInclude Include="VulkanValidation.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="imgui.ini" />
     <None Include="Shaders\frag.spv" />
     <None Include="Shaders\shader.frag" />
     <None Include="Shaders\shader.vert" />

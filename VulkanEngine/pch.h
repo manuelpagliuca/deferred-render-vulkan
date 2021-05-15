@@ -12,6 +12,9 @@
 #include <array>
 #include <fstream>
 
+// Project Data Structures
+#include "DataStructures.h"
+
 // GLFW
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -21,9 +24,10 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp> 
 
-// Project Data Structures
-#include "DataStructures.h"
+// STB IMAGE
+#include <stb_image.h>
 
+// DEAR IMGUI
 #include "imgui_impl_vulkan.h"
 #include "imgui_impl_glfw.h"
 #include "imgui.h"

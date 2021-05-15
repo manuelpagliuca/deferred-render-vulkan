@@ -13,137 +13,121 @@ std::vector<char> Utility::ReadFile(const std::string& filename)
 		throw std::runtime_error("Failed to open a file!");
 	}
 
-	size_t fileSize = static_cast<size_t>(file.tellg()); // Posizione del cursore = Dimensione File
-	file.seekg(0);										 // Riposiziono il cursore all'inizio 
-	std::vector<char> fileBuffer(fileSize);				 // Costruzione del file buffer
-	file.read(fileBuffer.data(), fileSize);				 // Legge il contenuto dello stream e lo salva sul buffer
+	size_t file_size = static_cast<size_t>(file.tellg());	
+	file.seekg(0);											
+	std::vector<char> file_buffer(file_size);				
+	file.read(file_buffer.data(), file_size);				
 
-	return fileBuffer;
+	return file_buffer;
 }
 
-void Utility::CreateBuffer(const MainDevice& mainDevice, const BufferSettings& buffer_settings, VkBuffer* data, VkDeviceMemory* memory)
+void Utility::CreateBuffer(const MainDevice& main_device, const BufferSettings& buffer_settings, VkBuffer* buffer_data, VkDeviceMemory* memory)
 {
-	VkBufferCreateInfo bufferInfo = {};
-	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size		   = buffer_settings.size;				// Dimensione del buffer
-	bufferInfo.usage	   = buffer_settings.usage;				// Utilizzo del buffer (VertexBuffer, IndexBuffer, UniformBuffer, ...)
-	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;	// Accesso alle immagini esclusivo alla Queue Family
+	VkBufferCreateInfo buffer_info = {};
+	buffer_info.sType			= VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	buffer_info.size			= buffer_settings.size;		
+	buffer_info.usage			= buffer_settings.usage;	
+	buffer_info.sharingMode		= VK_SHARING_MODE_EXCLUSIVE;
 
-	VkResult result = vkCreateBuffer(mainDevice.LogicalDevice, &bufferInfo, nullptr, data);
+	VkResult result = vkCreateBuffer(main_device.LogicalDevice, &buffer_info, nullptr, buffer_data);
+	
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Vertex Buffer!");
 	}
 
-	// Query per i requisiti di memoria del buffer
-	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(mainDevice.LogicalDevice, *data, &memRequirements);
+	VkMemoryRequirements mem_requirements;
+	vkGetBufferMemoryRequirements(main_device.LogicalDevice, *buffer_data, &mem_requirements);
 
-	// Informazioni per l'allocazione della memoria del buffer
-	VkMemoryAllocateInfo memoryAllocInfo = {};
-	memoryAllocInfo.sType		    = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	memoryAllocInfo.allocationSize  = memRequirements.size;					// Dimensione dell'allocazione = Memoria richiesta per il buffer
-	memoryAllocInfo.memoryTypeIndex = Utility::FindMemoryTypeIndex(mainDevice.PhysicalDevice, memRequirements.memoryTypeBits, buffer_settings.properties);
+	VkMemoryAllocateInfo memory_alloc_info = {};
+	memory_alloc_info.sType				= VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	memory_alloc_info.allocationSize	= mem_requirements.size;					
+	memory_alloc_info.memoryTypeIndex	= Utility::FindMemoryTypeIndex(main_device.PhysicalDevice, mem_requirements.memoryTypeBits, buffer_settings.properties);
 
 	// VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT  : CPU può interagire con la memoria
 	// VK_MEMORY_PROPERTY_HOST_COHERENT_BIT : Permette il posizionamento dei dati direttamente nel buffer dopo il mapping
 	// (altrimenti ha bisogno di essere specificato manualmente)
 
-	result = vkAllocateMemory(mainDevice.LogicalDevice, &memoryAllocInfo, nullptr, memory);
+	result = vkAllocateMemory(main_device.LogicalDevice, &memory_alloc_info, nullptr, memory);
 
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to allocate Vertex Buffer Memory!");
 	}
 
-	// Allocazione della memoria sul dato buffer
-	vkBindBufferMemory(mainDevice.LogicalDevice, *data, *memory, 0);
+	vkBindBufferMemory(main_device.LogicalDevice, *buffer_data, *memory, 0);
 }
 
-// Restituisce l'indice per il tipo di memoria desiderato, a partire dal tipo definito dal requisito di memoria
-// supportedMemoryTypes : Requisiti di memoria del buffer
-// properties			: Proprietà della memoria (come la visibilità/accesso del buffer)
-
-VkCommandBuffer Utility::BeginCommandBuffer(VkDevice device, VkCommandPool commandPool)
+VkCommandBuffer Utility::BeginCommandBuffer(const VkDevice &device, const VkCommandPool &commandPool)
 {
-	VkCommandBuffer commandBuffer;
+	VkCommandBuffer command_buffer;
 
-	VkCommandBufferAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = commandPool;
-	allocInfo.commandBufferCount = 1;
+	VkCommandBufferAllocateInfo alloc_info = {};
+	alloc_info.sType				= VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	alloc_info.level				= VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	alloc_info.commandPool			= commandPool;
+	alloc_info.commandBufferCount	= 1;
 
-	// Alloca il CommandBuffer dalla pool
-	vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+	vkAllocateCommandBuffers(device, &alloc_info, &command_buffer);
 
-	// Informazioni per iniziare la registrazione del Command Buffer
 	VkCommandBufferBeginInfo beginInfo = {};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // Ogni comando registrato nel Command Buffer verrà inviato soltanto una volta
 
-	// Inizia la registrazione del comando di trasferimento
-	vkBeginCommandBuffer(commandBuffer, &beginInfo);
+	vkBeginCommandBuffer(command_buffer, &beginInfo);
 
-	return commandBuffer;
+	return command_buffer;
 }
 
-void Utility::EndAndSubmitCommandBuffer(VkDevice device, VkCommandPool commandPool, VkQueue queue, VkCommandBuffer commandBuffer)
+void Utility::EndAndSubmitCommandBuffer(const VkDevice &device, const VkCommandPool &command_pool, const VkQueue &queue, const VkCommandBuffer &command_buffer)
 {
-	// Termina la registrazione del comando nel CommandBuffer
-	vkEndCommandBuffer(commandBuffer);
+	vkEndCommandBuffer(command_buffer);
 
-	// Informazioni per effettuare la submit del CommandBuffer alla Queue
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
+	VkSubmitInfo submit_info		= {};
+	submit_info.sType				= VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submit_info.commandBufferCount	= 1;
+	submit_info.pCommandBuffers		= &command_buffer;
 
 	// Invia li comando di copia alla Transfer Queue (nel nostro caso sarà la Graphics Queue) ed aspetta finchè termini
-	vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE);
 	vkQueueWaitIdle(queue);
 
-	// Libera il CommandBuffer
-	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+	vkFreeCommandBuffers(device, command_pool, 1, &command_buffer);
 }
 
-// Copia dei dati di un buffer in un altro attraverso dei CommandBuffer (quindi l'operazione è eseguita dalla GPU)
-void Utility::CopyBuffer(VkDevice& logicalDevice, VkQueue& transferQueue,
-	VkCommandPool& transferCommandPool, VkBuffer& srcBuffer,
-	VkBuffer& dstBuffer, VkDeviceSize bufferSize)
+void Utility::CopyBufferCmd(const VkDevice& logical_device, const VkQueue& transfer_queue, const VkCommandPool& transfer_command_pool, 
+	const VkBuffer& src_buffer, const VkBuffer& dst_buffer, const VkDeviceSize& buffer_size)
 {
-	VkCommandBuffer transferCommandBuffer = BeginCommandBuffer(logicalDevice, transferCommandPool);
+	VkCommandBuffer transfer_command_buffer = BeginCommandBuffer(logical_device, transfer_command_pool);
 
-	// Regione dei dati sorgente (da cui voglio copiare)
-	VkBufferCopy bufferCopyRegion = {};
-	bufferCopyRegion.srcOffset = 0;
-	bufferCopyRegion.dstOffset = 0;
-	bufferCopyRegion.size	   = bufferSize;
+	VkBufferCopy buffer_copy_region = {};
+	buffer_copy_region.srcOffset = 0;
+	buffer_copy_region.dstOffset = 0;
+	buffer_copy_region.size		 = buffer_size;
 
-	// Comando per copiare il srcBuffer nel dstBuffer
-	vkCmdCopyBuffer(transferCommandBuffer, srcBuffer, dstBuffer, 1, &bufferCopyRegion);
+	vkCmdCopyBuffer(transfer_command_buffer, src_buffer, dst_buffer, 1, &buffer_copy_region);
 
-	EndAndSubmitCommandBuffer(logicalDevice, transferCommandPool, transferQueue, transferCommandBuffer);
+	EndAndSubmitCommandBuffer(logical_device, transfer_command_pool, transfer_queue, transfer_command_buffer);
 }
 
 void Utility::CopyImageBuffer(VkDevice &device, VkQueue transferQueue, VkCommandPool transferCommandPool, VkBuffer src, VkImage image, uint32_t width, uint32_t height)
 {
-	VkCommandBuffer transferCommandBuffer = BeginCommandBuffer(device, transferCommandPool);
+	VkCommandBuffer transfer_command_buffer = BeginCommandBuffer(device, transferCommandPool);
 
-	VkBufferImageCopy imageRegion = {};
-	imageRegion.bufferOffset					= 0;
-	imageRegion.bufferRowLength					= 0;
-	imageRegion.bufferImageHeight				= 0;
-	imageRegion.imageSubresource.aspectMask		= VK_IMAGE_ASPECT_COLOR_BIT;
-	imageRegion.imageSubresource.mipLevel		= 0;
-	imageRegion.imageSubresource.baseArrayLayer = 0;
-	imageRegion.imageSubresource.layerCount		= 1;
-	imageRegion.imageOffset = { 0, 0, 0 };
-	imageRegion.imageExtent = { width, height, 1 };
+	VkBufferImageCopy image_region = {};
+	image_region.bufferOffset						= 0;
+	image_region.bufferRowLength					= 0;
+	image_region.bufferImageHeight					= 0;
+	image_region.imageSubresource.aspectMask		= VK_IMAGE_ASPECT_COLOR_BIT;
+	image_region.imageSubresource.mipLevel			= 0;
+	image_region.imageSubresource.baseArrayLayer	= 0;
+	image_region.imageSubresource.layerCount		= 1;
+	image_region.imageOffset						= { 0, 0, 0 };
+	image_region.imageExtent						= { width, height, 1 };
 
-	vkCmdCopyBufferToImage(transferCommandBuffer, src, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageRegion);
+	vkCmdCopyBufferToImage(transfer_command_buffer, src, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_region);
 
-	EndAndSubmitCommandBuffer(device, transferCommandPool, transferQueue, transferCommandBuffer);
+	EndAndSubmitCommandBuffer(device, transferCommandPool, transferQueue, transfer_command_buffer);
 }
 /*
 Model* Utility::AllocateDynamicBufferTransferSpace(VkDeviceSize minUniformBufferOffset)
@@ -192,75 +176,80 @@ void Utility::FreeAlignedMemoryDUBO(Model * modelTransferSpace)
 	_aligned_free(modelTransferSpace);
 }
 */
-void Utility::TransitionImageLayout(VkDevice &device, VkQueue queue, VkCommandPool commandPool, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout)
+void Utility::TransitionImageLayout(const VkDevice& device, const VkQueue& queue, const VkCommandPool& command_pool,
+	const VkImage& image, const VkImageLayout& old_layout, const VkImageLayout& new_layout)
 {
-	VkCommandBuffer commandBuffer = BeginCommandBuffer(device, commandPool);
+	VkCommandBuffer commandBuffer = BeginCommandBuffer(device, command_pool);
 
-	VkImageMemoryBarrier imageMemoryBarrier = {};
-	imageMemoryBarrier.sType							  = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	imageMemoryBarrier.oldLayout						  = oldLayout;					// Layout da cui spostarsi
-	imageMemoryBarrier.newLayout						  = newLayout;					// Layout in cui spostarsi
-	imageMemoryBarrier.srcQueueFamilyIndex			  = VK_QUEUE_FAMILY_IGNORED;	// Queue family da cui spostarsi
-	imageMemoryBarrier.dstQueueFamilyIndex			  = VK_QUEUE_FAMILY_IGNORED;	// Queue family in cui spostarsi
-	imageMemoryBarrier.image							  = image;						// Immagine che viene acceduta e modificata come parte della barriera
-	imageMemoryBarrier.subresourceRange.aspectMask	  = VK_IMAGE_ASPECT_COLOR_BIT;
-	imageMemoryBarrier.subresourceRange.baseMipLevel	  = 0;
-	imageMemoryBarrier.subresourceRange.levelCount	  = 1;
-	imageMemoryBarrier.subresourceRange.baseArrayLayer = 0;
-	imageMemoryBarrier.subresourceRange.layerCount	  = 1;
+	VkImageMemoryBarrier image_memory_barrier = {};
+	image_memory_barrier.sType								= VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	image_memory_barrier.oldLayout							= old_layout;					// Layout da cui spostarsi
+	image_memory_barrier.newLayout							= new_layout;					// Layout in cui spostarsi
+	image_memory_barrier.srcQueueFamilyIndex				= VK_QUEUE_FAMILY_IGNORED;	// Queue family da cui spostarsi
+	image_memory_barrier.dstQueueFamilyIndex				= VK_QUEUE_FAMILY_IGNORED;	// Queue family in cui spostarsi
+	image_memory_barrier.image								= image;						// Immagine che viene acceduta e modificata come parte della barriera
+	image_memory_barrier.subresourceRange.aspectMask		= VK_IMAGE_ASPECT_COLOR_BIT;
+	image_memory_barrier.subresourceRange.baseMipLevel		= 0;
+	image_memory_barrier.subresourceRange.levelCount		= 1;
+	image_memory_barrier.subresourceRange.baseArrayLayer	= 0;
+	image_memory_barrier.subresourceRange.layerCount		= 1;
 
-	VkPipelineStageFlags srcStage = 0;
-	VkPipelineStageFlags dstStage = 0;
+	VkPipelineStageFlags src_stage = 0;
+	VkPipelineStageFlags dst_stage = 0;
 	
-	// Se si sta transizionando da una nuova immagine ad un immagine pronta per ricevere i dati...
-	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-	{
-		imageMemoryBarrier.srcAccessMask = 0;							// Qualsiasi stage iniziale
-		imageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;	// Questo è lo stage che viene eseguito nel momento che lo stage nel 'srcAccessMask' viene completato
+	bool const is_old_undefined				= old_layout == VK_IMAGE_LAYOUT_UNDEFINED;
+	bool const is_new_transfer_dst_optimal	= new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	bool const is_old_transfer_dst_optimal	= old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	bool const is_new_shader_read_only		= new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-		srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;	// qualsiasi momento dopo l'inizio della pipeline
-		dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;		// Primache provi a fare una write nel transfer stage!
+	if (is_old_undefined && is_new_transfer_dst_optimal)
+	{
+		image_memory_barrier.srcAccessMask = 0;							// Qualsiasi stage iniziale
+		image_memory_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;	// Questo è lo stage che viene eseguito nel momento che lo stage nel 'srcAccessMask' viene completato
+
+		src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;	// qualsiasi momento dopo l'inizio della pipeline
+		dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;		// Primache provi a fare una write nel transfer stage!
 	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+	else if (is_old_transfer_dst_optimal && is_new_shader_read_only)
 	{
-		imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		image_memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		image_memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-		srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;			// al termine delle operazioni di scrittura del transfer stage
-		dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;	// prima che provi a a leggere il fragment shader
+		src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;			// al termine delle operazioni di scrittura del transfer stage
+		dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;	// prima che provi a a leggere il fragment shader
 	}
 
 	vkCmdPipelineBarrier(commandBuffer,
-		srcStage, dstStage,  // Pipeline stages sono connessi ai memory access (srcAccessMAsk ...)
+		src_stage, dst_stage,  // Pipeline stages sono connessi ai memory access (srcAccessMAsk ...)
 		0,	   // Dependencey flag
 		0, nullptr,	// Memory Barrier count + data
 		0, nullptr,	// Buffer memory barrier + data
-		1, &imageMemoryBarrier// ImageMemoryBarrier  count + data
+		1, &image_memory_barrier// ImageMemoryBarrier  count + data
 	);
 
-	EndAndSubmitCommandBuffer(device, commandPool, queue, commandBuffer);
+	EndAndSubmitCommandBuffer(device, command_pool, queue, commandBuffer);
 }
 
-VkImage Utility::CreateImage(MainDevice &mainDevice, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags useFlags, VkMemoryPropertyFlags propFlags, VkDeviceMemory* imageMemory)
+VkImage Utility::CreateImage(const MainDevice &main_device, const ImageInfo& image_info, VkDeviceMemory* imageMemory)
 {
 	// CREAZIONE DELL'IMMAGINE (Header dell'immagine, in memoria non è ancora presente)
 	VkImageCreateInfo imageCreateInfo = {};
-	imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageCreateInfo.extent.width = width;
-	imageCreateInfo.extent.height = height;
-	imageCreateInfo.extent.depth = 1;			// NO 3D ASPECT
-	imageCreateInfo.mipLevels = 1;
-	imageCreateInfo.arrayLayers = 1;
-	imageCreateInfo.format = format;
-	imageCreateInfo.tiling = tiling;
-	imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // layout dell'immagine al momento della creazione
-	imageCreateInfo.usage = useFlags;
-	imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageCreateInfo.sType			= VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageCreateInfo.imageType		= VK_IMAGE_TYPE_2D;
+	imageCreateInfo.extent.width	= image_info.width;
+	imageCreateInfo.extent.height	= image_info.height;
+	imageCreateInfo.extent.depth	= 1;			// NO 3D ASPECT
+	imageCreateInfo.mipLevels		= 1;
+	imageCreateInfo.arrayLayers		= 1;
+	imageCreateInfo.format			= image_info.format;
+	imageCreateInfo.tiling			= image_info.tiling;
+	imageCreateInfo.initialLayout	= VK_IMAGE_LAYOUT_UNDEFINED; // layout dell'immagine al momento della creazione
+	imageCreateInfo.usage			= image_info.usage;
+	imageCreateInfo.samples			= VK_SAMPLE_COUNT_1_BIT;
+	imageCreateInfo.sharingMode		= VK_SHARING_MODE_EXCLUSIVE;
 
 	VkImage image;
-	VkResult result = vkCreateImage(mainDevice.LogicalDevice, &imageCreateInfo, nullptr, &image);
+	VkResult result = vkCreateImage(main_device.LogicalDevice, &imageCreateInfo, nullptr, &image);
 
 	if (result != VK_SUCCESS)
 	{
@@ -269,21 +258,21 @@ VkImage Utility::CreateImage(MainDevice &mainDevice, uint32_t width, uint32_t he
 
 	// CREAZIONE DELLA MEMORIA PER L'IMMAGINE
 	VkMemoryRequirements memoryRequirements;
-	vkGetImageMemoryRequirements(mainDevice.LogicalDevice, image, &memoryRequirements);
+	vkGetImageMemoryRequirements(main_device.LogicalDevice, image, &memoryRequirements);
 
 	VkMemoryAllocateInfo memoryAllocInfo = {};
 	memoryAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memoryAllocInfo.allocationSize = memoryRequirements.size;
-	memoryAllocInfo.memoryTypeIndex = FindMemoryTypeIndex(mainDevice.PhysicalDevice, memoryRequirements.memoryTypeBits, propFlags);
+	memoryAllocInfo.memoryTypeIndex = FindMemoryTypeIndex(main_device.PhysicalDevice, memoryRequirements.memoryTypeBits, image_info.properties);
 
-	result = vkAllocateMemory(mainDevice.LogicalDevice, &memoryAllocInfo, nullptr, imageMemory);
+	result = vkAllocateMemory(main_device.LogicalDevice, &memoryAllocInfo, nullptr, imageMemory);
 
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to allocate memory for image!");
 	}
 
-	result = vkBindImageMemory(mainDevice.LogicalDevice, image, *imageMemory, 0);
+	result = vkBindImageMemory(main_device.LogicalDevice, image, *imageMemory, 0);
 
 	if (result != VK_SUCCESS)
 	{
@@ -323,45 +312,54 @@ VkImageView Utility::CreateImageView(const VkDevice& logical_device, const VkIma
 	return imageView;
 }
 
-void Utility::CreateDepthBufferImage(DepthBufferImage& image, MainDevice &mainDevice, VkExtent2D imgExtent)
+void Utility::CreateDepthBufferImage(DepthBufferImage& image, const MainDevice &main_device, const VkExtent2D &image_extent)
 {
 	// Depth value of 32bit expressed in floats + stencil buffer (non lo usiamo ma è utile averlo disponibile)
 // Nel caso in cui lo stencil buffer non sia disponibile andiamo a prendere solo il depth buffer 32 bit.
 // Se non è disponibile neanche quello da 32 bit si prova con quello di 24 (poi non proviamo più).
-	image.Format = Utility::ChooseSupportedFormat(mainDevice, { VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D24_UNORM_S8_UINT },
-		VK_IMAGE_TILING_OPTIMAL,
-		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+	const std::vector<VkFormat> formats = { VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D24_UNORM_S8_UINT };
+	const VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
+	const VkFormatFeatureFlagBits format_flags = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-	image.Image = Utility::CreateImage(mainDevice, imgExtent.width, imgExtent.height,
-		image.Format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &image.Memory);
+	image.Format = Utility::ChooseSupportedFormat(main_device, formats, tiling, format_flags);
 
-	image.ImageView = Utility::CreateImageView(mainDevice.LogicalDevice, image.Image, image.Format, VK_IMAGE_ASPECT_DEPTH_BIT);
+	ImageInfo image_info = {};
+	image_info.width		= image_extent.width;
+	image_info.height		= image_extent.height;
+	image_info.format		= image.Format;
+	image_info.tiling		= tiling;
+	image_info.usage		= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	image_info.properties	= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+	image.Image = Utility::CreateImage(main_device, image_info, &image.Memory);
+
+	image.ImageView = Utility::CreateImageView(main_device.LogicalDevice, image.Image, image.Format, VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 
 uint32_t Utility::FindMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t supportedMemoryTypes, VkMemoryPropertyFlags properties)
 {
 	// Query per le proprietà della memoria
-	VkPhysicalDeviceMemoryProperties memoryProperties;
-	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+	VkPhysicalDeviceMemoryProperties memory_properties;
+	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memory_properties);
 
 	// Per ogni tipo di memoria 
-	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
+	for (uint32_t i = 0; i < memory_properties.memoryTypeCount; ++i)
 	{
 		// Itera per ogni tipo di memoria shiftando a sinistra un 1
 		// in questo modo crea delle varie combinazioni di tipologie di memoria.
 		// Se esiste una combinazione di memoria che è supportata e che quindi è contenuta in "supportedMemoryTypes"
 		// questo significa che si prenderà il tipo di memoria che supporta tutti 
 		// i flag possibili (tutti i bit saranno ad 1, quindi con valore 256).
-		auto supportedMemory = supportedMemoryTypes & (1U << i);
+		unsigned int supported_memory = supportedMemoryTypes & (1U << i);
 
 		// Itera per ogni tipo di memoria e fa AND BIT-a-BIT con le proprietà del tipo di memoria.
 		// Se dopo questa operazione, il risultato è uguale all proprietà della memoria fornite.
 		// Allora quella proprietà è supportata dall'i-esimo indice
-		auto supportedProperties = (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties;
+		bool supported_properties = (memory_properties.memoryTypes[i].propertyFlags & properties) == properties;
 
 		// Se il tipo di memoria è stato trovato assieme alle proprietà durante lo stesso ciclo
 		// significa che il tipo di memoria è valido e ne restituiamo l'indice.
-		if (supportedMemory && supportedProperties)
+		if (supported_memory && supported_properties)
 		{
 			return i;
 		}
@@ -370,22 +368,22 @@ uint32_t Utility::FindMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t 
 	return static_cast<uint32_t>(0);
 }
 
-VkShaderModule Utility::CreateShaderModule(VkDevice &device, const std::vector<char>& code)
+VkShaderModule Utility::CreateShaderModule(const VkDevice &device, const std::vector<char>& spirv_code)
 {
-	VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
-	shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	shaderModuleCreateInfo.codeSize = code.size();									  // Dimensione del codice SPIR-V
-	shaderModuleCreateInfo.pCode = reinterpret_cast<const uint32_t*>(code.data()); // Puntatore al codice SPIR-V
+	VkShaderModuleCreateInfo shader_module_create_info = {};
+	shader_module_create_info.sType		= VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shader_module_create_info.codeSize	= spirv_code.size();									 
+	shader_module_create_info.pCode		= reinterpret_cast<const uint32_t*>(spirv_code.data());
 
-	VkShaderModule shaderModule;
-	VkResult result = vkCreateShaderModule(device, &shaderModuleCreateInfo, nullptr, &shaderModule);
+	VkShaderModule shader_module;
+	VkResult result = vkCreateShaderModule(device, &shader_module_create_info, nullptr, &shader_module);
 
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Shader Module!");
 	}
 
-	return shaderModule;
+	return shader_module;
 }
 
 int Utility::CreateTexture(
@@ -433,14 +431,17 @@ int Utility::CreateTextureImage(MainDevice& mainDevice, TextureObjects &textureO
 	stbi_image_free(imageData);
 
 	// create image to hold final texture
+	ImageInfo image_info = {};
+	image_info.width		= width;
+	image_info.height		= height;
+	image_info.format		= VK_FORMAT_R8G8B8A8_UNORM;
+	image_info.tiling		= VK_IMAGE_TILING_OPTIMAL;
+	image_info.usage		= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	image_info.properties	= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
 	VkImage texImage;
 	VkDeviceMemory texImageMemory;
-	texImage = Utility::CreateImage(
-		mainDevice,
-		width, height,
-		VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL,
-		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &texImageMemory);
+	texImage = Utility::CreateImage(mainDevice, image_info, &texImageMemory);
 
 	// Descrive la pipeline barrier che deve rispettare la queue
 	TransitionImageLayout(mainDevice.LogicalDevice, graphicsQueue, graphicsCommandPool, texImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -458,7 +459,7 @@ int Utility::CreateTextureImage(MainDevice& mainDevice, TextureObjects &textureO
 	return static_cast<int>(textureObjects.TextureImages.size()) - 1;
 }
 
-stbi_uc* Utility::LoadTextureFile(std::string fileName, int* width, int* height, VkDeviceSize* imageSize)
+stbi_uc* Utility::LoadTextureFile(const std::string &fileName, int* width, int* height, VkDeviceSize* imageSize)
 {
 	int nChannels;
 
@@ -477,57 +478,63 @@ stbi_uc* Utility::LoadTextureFile(std::string fileName, int* width, int* height,
 	return nullptr;
 }
 
-int Utility::CreateTextureDescriptor(VkDevice &device, VkImageView textureImage, VkDescriptorPool &texturePool, VkDescriptorSetLayout &textureLayout, TextureObjects &textureObjects)
+int Utility::CreateTextureDescriptor(const VkDevice& device, const VkImageView& texture_image, const VkDescriptorPool& texture_pool, 
+	const VkDescriptorSetLayout& texture_layout, TextureObjects& texture_objects)
 {
-	VkDescriptorSet descriptorSet;
+	VkDescriptorSet descriptor_set;
 
-	VkDescriptorSetAllocateInfo setAllocInfo = {};
-	setAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	setAllocInfo.descriptorPool = texturePool;
-	setAllocInfo.descriptorSetCount = 1;
-	setAllocInfo.pSetLayouts = &textureLayout;
+	VkDescriptorSetAllocateInfo set_alloc_info = {};
+	set_alloc_info.sType				= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	set_alloc_info.descriptorPool		= texture_pool;
+	set_alloc_info.descriptorSetCount	= 1;
+	set_alloc_info.pSetLayouts			= &texture_layout;
 
-	VkResult result = vkAllocateDescriptorSets(device, &setAllocInfo, &descriptorSet);
+	VkResult result = vkAllocateDescriptorSets(device, &set_alloc_info, &descriptor_set);
+
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to allocate Texture Descriptor Set!");
 	}
 
 	VkDescriptorImageInfo imageInfo = {};
-	imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	imageInfo.imageView = textureImage;
-	imageInfo.sampler = textureObjects.TextureSampler;
-
+	imageInfo.imageLayout	= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	imageInfo.imageView		= texture_image;
+	imageInfo.sampler		= texture_objects.TextureSampler;
 
 	VkWriteDescriptorSet descriptorWrite = {};
-	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite.dstSet = descriptorSet;
-	descriptorWrite.dstBinding = 0;
+	descriptorWrite.sType			= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrite.dstSet			= descriptor_set;
+	descriptorWrite.dstBinding		= 0;
 	descriptorWrite.dstArrayElement = 0;
-	descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	descriptorWrite.descriptorType	= VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	descriptorWrite.descriptorCount = 1;
-	descriptorWrite.pImageInfo = &imageInfo;
+	descriptorWrite.pImageInfo		= &imageInfo;
 
 	vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
 
-	textureObjects.SamplerDescriptorSets.push_back(descriptorSet);
+	texture_objects.SamplerDescriptorSets.push_back(descriptor_set);
 
-	return static_cast<int>(textureObjects.SamplerDescriptorSets.size()) - 1;
+	return static_cast<int>(texture_objects.SamplerDescriptorSets.size()) - 1;
 }
 
-VkFormat Utility::ChooseSupportedFormat(MainDevice &mainDevice, const std::vector<VkFormat>& formats, VkImageTiling tiling, VkFormatFeatureFlags featureFlags)
+VkFormat Utility::ChooseSupportedFormat(const MainDevice& main_device, const std::vector<VkFormat>& formats, 
+	const VkImageTiling& tiling, const VkFormatFeatureFlags& feature_flags)
 {
 	for (VkFormat format : formats)
 	{
 		VkFormatProperties properties;
-		vkGetPhysicalDeviceFormatProperties(mainDevice.PhysicalDevice, format, &properties);
+		vkGetPhysicalDeviceFormatProperties(main_device.PhysicalDevice, format, &properties);
 
-		// In base alle scelte di tiling si sceglie un bitflag differente
-		if (tiling == VK_IMAGE_TILING_LINEAR && (properties.linearTilingFeatures & featureFlags) == featureFlags)
+		bool const is_tiling_linear		 = tiling == VK_IMAGE_TILING_LINEAR;
+		bool const linear_support_flags	 = (properties.linearTilingFeatures & feature_flags) == feature_flags;
+		bool const is_tiling_optimal	 = tiling == VK_IMAGE_TILING_OPTIMAL;
+		bool const optimal_support_flags = (properties.optimalTilingFeatures & feature_flags) == feature_flags;
+		
+		if (is_tiling_linear && linear_support_flags)
 		{
 			return format;
 		}
-		else if (tiling == VK_IMAGE_TILING_OPTIMAL && (properties.optimalTilingFeatures & featureFlags) == featureFlags)
+		else if (is_tiling_optimal && optimal_support_flags)
 		{
 			return format;
 		}
@@ -535,52 +542,50 @@ VkFormat Utility::ChooseSupportedFormat(MainDevice &mainDevice, const std::vecto
 	throw std::runtime_error("Failed to find a matching format!");
 }
 
-void Utility::GetQueueFamilyIndices(VkPhysicalDevice &physicalDevice, VkSurfaceKHR &surface, QueueFamilyIndices& queueFamilyIndices)
+void Utility::GetQueueFamilyIndices(const VkPhysicalDevice& physical_device, const VkSurfaceKHR& surface, QueueFamilyIndices& queue_family_indices)
 {
-	// Prelevo le Queue Families disponibili nel dispositivo fisico
-	uint32_t queueFamilyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+	uint32_t queue_family_count = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);
 
-	std::vector<VkQueueFamilyProperties> queueFamilyList(queueFamilyCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyList.data());
+	std::vector<VkQueueFamilyProperties> queue_family_list(queue_family_count);
+	vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, queue_family_list.data());
 
-	// Indice delle Queue Families (a carico del developer)
-	int queueIndex = 0;
+	int queue_index = 0;
 
-	if (queueFamilyCount > 0)
+	if (queue_family_count > 0)
 	{
-		for (const auto& queueFamily : queueFamilyList)
+		for (const auto& queue_family : queue_family_list)
 		{
 			// Se la QueueFamily è valida ed è una Queue grafica, salvo l'indice nel Renderer
-			if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+			if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			{
-				queueFamilyIndices.GraphicsFamily = queueIndex;
+				queue_family_indices.GraphicsFamily = queue_index;
 			}
 
-			VkBool32 presentationSupport = false;
+			VkBool32 presentation_support = false;
 
 			/*	Query per chiedere se è supportata la Presentation Mode nella Queue Family.
 				Solitamente le Queue Family appartenenti alla grafica la supportano.
 				Questa caratteristica è obbligatoria per presentare l'immagine dalla SwapChain alla Surface.*/
-			vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, queueIndex, surface, &presentationSupport);
+			vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, queue_index, surface, &presentation_support);
 
 			// Se la Queue Family supporta la Presentation Mode, salvo l'indice nel Renderer (solitamente sono gli stessi indici)
-			if (presentationSupport)
+			if (presentation_support)
 			{
-				queueFamilyIndices.PresentationFamily = queueIndex;
+				queue_family_indices.PresentationFamily = queue_index;
 			}
 
-			if (queueFamilyIndices.isValid())
+			if (queue_family_indices.isValid())
 			{
 				break;
 			}
 
-			++queueIndex;
+			++queue_index;
 		}
 	}
 }
 
-bool Utility::CheckDeviceExtensionSupport(VkPhysicalDevice& device, const std::vector<const char*>& requestedDeviceExtensions)
+bool Utility::CheckDeviceExtensionSupport(const VkPhysicalDevice& device, const std::vector<const char*>& requested_device_extensions)
 {
 	uint32_t extensionCount = 0;
 	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
@@ -591,7 +596,7 @@ bool Utility::CheckDeviceExtensionSupport(VkPhysicalDevice& device, const std::v
 	std::vector<VkExtensionProperties> physicalDeviceExtensions(extensionCount);
 	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, physicalDeviceExtensions.data());
 
-	for (const auto& extensionToCheck : requestedDeviceExtensions)
+	for (const auto& extensionToCheck : requested_device_extensions)
 	{
 		bool hasExtension = false;
 
