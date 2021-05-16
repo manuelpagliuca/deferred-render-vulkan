@@ -15,7 +15,7 @@ public:
 	VkRenderPass& GetRenderPass()		   { return m_RenderPass; }
 
 	void CreateRenderPass();
-	void SetColourAttachment(VkFormat imageFormat);
+	void SetColourAttachment(const VkFormat& imageFormat);
 	void SetDepthAttachment();
 
 	void SetSubpassDescription();

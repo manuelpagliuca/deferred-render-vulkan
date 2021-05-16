@@ -14,17 +14,23 @@ struct MainDevice {
 
 struct VulkanRenderData {
 	VkInstance			instance;
-	VkPhysicalDevice	physicalDevice;
-	VkDevice			device;
-	uint32_t			graphicQueueIndex;
-	VkQueue				graphicQueue;
-	VkDescriptorPool	imguiDescriptorPool;
-	uint32_t			minImageCount;
-	uint32_t			imageCount;
 
-	VkRenderPass		renderPass;
-	VkCommandPool		commandPool;
-	std::vector<VkCommandBuffer> commandBuffers;
+	MainDevice			main_device;
+	VkPhysicalDevice	physical_device;
+	VkDevice			device;
+
+	uint32_t			graphic_queue_index;
+	VkQueue				graphic_queue;
+
+	uint32_t			min_image_count;
+	uint32_t			image_count;
+
+	VkDescriptorPool	imgui_descriptor_pool;
+	VkCommandPool		command_pool;
+	
+std::vector<VkCommandBuffer> command_buffers;
+
+	VkRenderPass		render_pass;
 };
 
 struct ImageInfo {

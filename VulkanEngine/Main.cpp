@@ -68,8 +68,6 @@ int main(void)
 		vulkanRenderer->UpdateModel(0, firstModel);
 		vulkanRenderer->UpdateModel(1, secondModel);
 				
-		//render
-
 		GUI::GetInstance()->Render();
 		auto draw_data = GUI::GetInstance()->GetDrawData();
 		

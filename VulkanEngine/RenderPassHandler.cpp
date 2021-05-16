@@ -39,7 +39,7 @@ void RenderPassHandler::CreateRenderPass()
 	}
 }
 
-void RenderPassHandler::SetColourAttachment(VkFormat imageFormat)
+void RenderPassHandler::SetColourAttachment(const VkFormat &imageFormat)
 {
 	/* Attachment del RenderPass */
 	// Definizione del Layout iniziale e Layout finale del RenderPass

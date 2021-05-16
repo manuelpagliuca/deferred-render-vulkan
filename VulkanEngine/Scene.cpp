@@ -4,18 +4,20 @@
 
 Scene::Scene()
 {
-	m_MainDevice			= nullptr;
+	m_RenderData = {};
 	m_DescriptorsHandler	= nullptr;
-	m_GraphicsQueue			= nullptr;
-	m_CommandHandler		= nullptr;
 }
 
-Scene::Scene(MainDevice* mainDevice, DescriptorsHandler* descHandler, VkQueue* graphicsQueue, CommandHandler* commHandler)
+Scene::Scene(const VulkanRenderData &render_data, DescriptorsHandler* descriptor_handler)
 {
-	m_MainDevice			= mainDevice;
-	m_DescriptorsHandler	= descHandler;
-	m_GraphicsQueue			= graphicsQueue;
-	m_CommandHandler		= commHandler;
+	m_RenderData		 = render_data;
+	m_DescriptorsHandler = descriptor_handler;
+}
+
+void Scene::PassRenderData(const VulkanRenderData& render_data, DescriptorsHandler* descriptor_handler)
+{
+	m_RenderData = render_data;
+	m_DescriptorsHandler = descriptor_handler;
 }
 
 void Scene::LoadScene(std::vector<Mesh> &meshList, TextureObjects &textureObjects)
@@ -40,18 +42,18 @@ void Scene::LoadScene(std::vector<Mesh> &meshList, TextureObjects &textureObject
 		2, 3, 0
 	};
 
-	int giraffeTexture = Utility::CreateTexture(*m_MainDevice, m_DescriptorsHandler->GetTexturePool(),
+	int giraffeTexture = Utility::CreateTexture(m_RenderData.main_device, m_DescriptorsHandler->GetTexturePool(),
 		m_DescriptorsHandler->GetTextureDescriptorSetLayout(),
-		textureObjects, *m_GraphicsQueue, m_CommandHandler->GetCommandPool(), "giraffe.jpg");
+		textureObjects, m_RenderData.graphic_queue, m_RenderData.command_pool, "giraffe.jpg");
 
 	meshList.push_back(Mesh(
-		*m_MainDevice,
-		*m_GraphicsQueue, m_CommandHandler->GetCommandPool(),
+		m_RenderData.main_device,
+		m_RenderData.graphic_queue, m_RenderData.command_pool,
 		&meshVertices, &meshIndices, giraffeTexture));
 
 	meshList.push_back(Mesh(
-		*m_MainDevice,
-		*m_GraphicsQueue, m_CommandHandler->GetCommandPool(),
+		m_RenderData.main_device,
+		m_RenderData.graphic_queue, m_RenderData.command_pool,
 		&meshVertices2, &meshIndices, giraffeTexture));
 
 	glm::mat4 meshModelMatrix = meshList[0].getModel().model;

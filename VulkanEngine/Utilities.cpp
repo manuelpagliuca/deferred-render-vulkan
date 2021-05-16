@@ -110,9 +110,9 @@ void Utility::CopyBufferCmd(const VkDevice& logical_device, const VkQueue& trans
 	EndAndSubmitCommandBuffer(logical_device, transfer_command_pool, transfer_queue, transfer_command_buffer);
 }
 
-void Utility::CopyImageBuffer(VkDevice &device, VkQueue transferQueue, VkCommandPool transferCommandPool, VkBuffer src, VkImage image, uint32_t width, uint32_t height)
+void Utility::CopyImageBuffer(const VkDevice &device, const VkQueue &transfer_queue, const VkCommandPool &transfer_command_pool, const VkBuffer &src, const VkImage &image, const uint32_t width, const uint32_t height)
 {
-	VkCommandBuffer transfer_command_buffer = BeginCommandBuffer(device, transferCommandPool);
+	VkCommandBuffer transfer_command_buffer = BeginCommandBuffer(device, transfer_command_pool);
 
 	VkBufferImageCopy image_region = {};
 	image_region.bufferOffset						= 0;
@@ -127,7 +127,7 @@ void Utility::CopyImageBuffer(VkDevice &device, VkQueue transferQueue, VkCommand
 
 	vkCmdCopyBufferToImage(transfer_command_buffer, src, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_region);
 
-	EndAndSubmitCommandBuffer(device, transferCommandPool, transferQueue, transfer_command_buffer);
+	EndAndSubmitCommandBuffer(device, transfer_command_pool, transfer_queue, transfer_command_buffer);
 }
 /*
 Model* Utility::AllocateDynamicBufferTransferSpace(VkDeviceSize minUniformBufferOffset)
@@ -179,38 +179,41 @@ void Utility::FreeAlignedMemoryDUBO(Model * modelTransferSpace)
 void Utility::TransitionImageLayout(const VkDevice& device, const VkQueue& queue, const VkCommandPool& command_pool,
 	const VkImage& image, const VkImageLayout& old_layout, const VkImageLayout& new_layout)
 {
-	VkCommandBuffer commandBuffer = BeginCommandBuffer(device, command_pool);
+	VkCommandBuffer command_buffer = BeginCommandBuffer(device, command_pool);
 
 	VkImageMemoryBarrier image_memory_barrier = {};
 	image_memory_barrier.sType								= VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	image_memory_barrier.oldLayout							= old_layout;					// Layout da cui spostarsi
 	image_memory_barrier.newLayout							= new_layout;					// Layout in cui spostarsi
-	image_memory_barrier.srcQueueFamilyIndex				= VK_QUEUE_FAMILY_IGNORED;	// Queue family da cui spostarsi
-	image_memory_barrier.dstQueueFamilyIndex				= VK_QUEUE_FAMILY_IGNORED;	// Queue family in cui spostarsi
-	image_memory_barrier.image								= image;						// Immagine che viene acceduta e modificata come parte della barriera
+	image_memory_barrier.srcQueueFamilyIndex				= VK_QUEUE_FAMILY_IGNORED;		// Queue family da cui spostarsi
+	image_memory_barrier.dstQueueFamilyIndex				= VK_QUEUE_FAMILY_IGNORED;		// Queue family in cui spostarsi
+	image_memory_barrier.image								= image;						// Immagine su cui wrappare la barriera
 	image_memory_barrier.subresourceRange.aspectMask		= VK_IMAGE_ASPECT_COLOR_BIT;
 	image_memory_barrier.subresourceRange.baseMipLevel		= 0;
 	image_memory_barrier.subresourceRange.levelCount		= 1;
 	image_memory_barrier.subresourceRange.baseArrayLayer	= 0;
 	image_memory_barrier.subresourceRange.layerCount		= 1;
 
-	VkPipelineStageFlags src_stage = 0;
-	VkPipelineStageFlags dst_stage = 0;
-	
-	bool const is_old_undefined				= old_layout == VK_IMAGE_LAYOUT_UNDEFINED;
-	bool const is_new_transfer_dst_optimal	= new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	bool const is_old_transfer_dst_optimal	= old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	bool const is_new_shader_read_only		= new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	bool const old_layout_undefined				= old_layout == VK_IMAGE_LAYOUT_UNDEFINED;
+	bool const new_layout_transfer_dst_optimal	= new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
-	if (is_old_undefined && is_new_transfer_dst_optimal)
+	bool const old_layout_transfer_dst_optimal	= old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	bool const new_layout_shader_read_only		= new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+	VkPipelineStageFlags src_stage = 0;	// Stage dal quale è possibile iniziare la transizione
+	VkPipelineStageFlags dst_stage = 0;	// Stage nel quale la transizione deve essere già terminata
+
+	// La transizione da oldLayout a newLayout inizierà a partire dallo stage definito in srcAccessMask
+	// ma prima del termine dello stage definito in dstAccessMask.
+	if (old_layout_undefined && new_layout_transfer_dst_optimal)
 	{
-		image_memory_barrier.srcAccessMask = 0;							// Qualsiasi stage iniziale
-		image_memory_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;	// Questo è lo stage che viene eseguito nel momento che lo stage nel 'srcAccessMask' viene completato
+		image_memory_barrier.srcAccessMask = 0;								// Qualsiasi stage iniziale
+		image_memory_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;	// copyBufferImage è una operazione di write
 
 		src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;	// qualsiasi momento dopo l'inizio della pipeline
 		dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;		// Primache provi a fare una write nel transfer stage!
 	}
-	else if (is_old_transfer_dst_optimal && is_new_shader_read_only)
+	else if (old_layout_transfer_dst_optimal && new_layout_shader_read_only)
 	{
 		image_memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 		image_memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
@@ -219,15 +222,22 @@ void Utility::TransitionImageLayout(const VkDevice& device, const VkQueue& queue
 		dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;	// prima che provi a a leggere il fragment shader
 	}
 
-	vkCmdPipelineBarrier(commandBuffer,
-		src_stage, dst_stage,  // Pipeline stages sono connessi ai memory access (srcAccessMAsk ...)
-		0,	   // Dependencey flag
-		0, nullptr,	// Memory Barrier count + data
-		0, nullptr,	// Buffer memory barrier + data
-		1, &image_memory_barrier// ImageMemoryBarrier  count + data
+	const VkDependencyFlags dep_flags = 0;
+
+	const uint32_t memory_barrier_count			= 0;
+	const uint32_t buffer_memory_barrier_count	= 0;
+	const uint32_t image_memory_barrier_count	= 1;
+
+	vkCmdPipelineBarrier(
+		command_buffer,
+		src_stage, dst_stage, 
+		dep_flags,
+		memory_barrier_count, nullptr,						// no global memory barrier
+		buffer_memory_barrier_count, nullptr,				// no buffer memory barrier
+		image_memory_barrier_count, &image_memory_barrier
 	);
 
-	EndAndSubmitCommandBuffer(device, command_pool, queue, commandBuffer);
+	EndAndSubmitCommandBuffer(device, command_pool, queue, command_buffer);
 }
 
 VkImage Utility::CreateImage(const MainDevice &main_device, const ImageInfo& image_info, VkDeviceMemory* imageMemory)
@@ -392,43 +402,42 @@ int Utility::CreateTexture(
 	VkCommandPool& graphicsCommandPool,
 	std::string fileName)
 {
-	int textureImageLoc = CreateTextureImage(mainDevice, textureObjects, graphicsQueue, graphicsCommandPool, fileName);
+	int const texture_image_location = CreateTextureImage(mainDevice, textureObjects, graphicsQueue, graphicsCommandPool, fileName);
 
-	VkImageView imageView = Utility::CreateImageView(mainDevice.LogicalDevice, textureObjects.TextureImages[textureImageLoc], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
-	textureObjects.TextureImageViews.push_back(imageView);
+	VkImageView image_view = Utility::CreateImageView(mainDevice.LogicalDevice, textureObjects.TextureImages[texture_image_location], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
+	
+	textureObjects.TextureImageViews.push_back(image_view);
 
-	// TODO : Create Descriptor Set Here
-	int descriptorLoc = CreateTextureDescriptor(mainDevice.LogicalDevice, imageView, texturePool, textureLayout, textureObjects);
+	int const descriptor_location = CreateTextureDescriptor(mainDevice.LogicalDevice, image_view, texturePool, textureLayout, textureObjects);
 
-	return descriptorLoc;
+	return descriptor_location;
 }
 
 int Utility::CreateTextureImage(MainDevice& mainDevice, TextureObjects &textureObjects, 
 	VkQueue &graphicsQueue, VkCommandPool &graphicsCommandPool, std::string fileName)
 {
 	int width, height;
-	VkDeviceSize imageSize;
-	stbi_uc* imageData = LoadTextureFile(fileName, &width, &height, &imageSize);
+	VkDeviceSize image_size;
+	stbi_uc* image_data = LoadTextureFile(fileName, &width, &height, &image_size);
 
-	// staging buffer
-	VkBuffer imageStaginBuffer;
-	VkDeviceMemory imageStagingBufferMemory;
+	VkBuffer staging_buffer;
+	VkDeviceMemory staging_buffer_memory;
 
 	BufferSettings buffer_settings;
-	buffer_settings.size = imageSize;
-	buffer_settings.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-	buffer_settings.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+	buffer_settings.size		= image_size;
+	buffer_settings.usage		= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	buffer_settings.properties	= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
 
-	CreateBuffer(mainDevice, buffer_settings, &imageStaginBuffer, &imageStagingBufferMemory);
+	CreateBuffer(mainDevice, buffer_settings, &staging_buffer, &staging_buffer_memory);
 
 	// copy image data to staging buffer
 	void* data;
-	vkMapMemory(mainDevice.LogicalDevice, imageStagingBufferMemory, 0, imageSize, 0, &data);
-	memcpy(data, imageData, static_cast<size_t>(imageSize));
-	vkUnmapMemory(mainDevice.LogicalDevice, imageStagingBufferMemory);
+	vkMapMemory(mainDevice.LogicalDevice, staging_buffer_memory, 0, image_size, 0, &data);
+	memcpy(data, image_data, static_cast<size_t>(image_size));
+	vkUnmapMemory(mainDevice.LogicalDevice, staging_buffer_memory);
 
-	stbi_image_free(imageData);
+	stbi_image_free(image_data);
 
 	// create image to hold final texture
 	ImageInfo image_info = {};
@@ -439,21 +448,21 @@ int Utility::CreateTextureImage(MainDevice& mainDevice, TextureObjects &textureO
 	image_info.usage		= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 	image_info.properties	= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-	VkImage texImage;
-	VkDeviceMemory texImageMemory;
-	texImage = Utility::CreateImage(mainDevice, image_info, &texImageMemory);
+	VkImage texture_image;
+	VkDeviceMemory texture_image_memory;
+	texture_image = Utility::CreateImage(mainDevice, image_info, &texture_image_memory);
 
 	// Descrive la pipeline barrier che deve rispettare la queue
-	TransitionImageLayout(mainDevice.LogicalDevice, graphicsQueue, graphicsCommandPool, texImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	CopyImageBuffer(mainDevice.LogicalDevice, graphicsQueue, graphicsCommandPool, imageStaginBuffer, texImage, width, height);
-	TransitionImageLayout(mainDevice.LogicalDevice, graphicsQueue, graphicsCommandPool, texImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	TransitionImageLayout(mainDevice.LogicalDevice, graphicsQueue, graphicsCommandPool, texture_image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	CopyImageBuffer(mainDevice.LogicalDevice, graphicsQueue, graphicsCommandPool, staging_buffer, texture_image, width, height);
+	TransitionImageLayout(mainDevice.LogicalDevice, graphicsQueue, graphicsCommandPool, texture_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-	textureObjects.TextureImages.push_back(texImage);
-	textureObjects.TextureImageMemory.push_back(texImageMemory);
+	textureObjects.TextureImages.push_back(texture_image);
+	textureObjects.TextureImageMemory.push_back(texture_image_memory);
 
 	// Destroying staging buffer
-	vkDestroyBuffer(mainDevice.LogicalDevice, imageStaginBuffer, nullptr);
-	vkFreeMemory(mainDevice.LogicalDevice, imageStagingBufferMemory, nullptr);
+	vkDestroyBuffer(mainDevice.LogicalDevice, staging_buffer, nullptr);
+	vkFreeMemory(mainDevice.LogicalDevice, staging_buffer_memory, nullptr);
 
 	// Restituisce l'indice della nuova texture image
 	return static_cast<int>(textureObjects.TextureImages.size()) - 1;

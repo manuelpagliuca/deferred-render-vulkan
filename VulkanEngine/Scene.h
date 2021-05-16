@@ -9,12 +9,13 @@ class Scene
 {
 public:
 	Scene();
-	Scene(MainDevice* mainDevice, DescriptorsHandler* descHandler, VkQueue* graphicsQueue, CommandHandler* commHandler);
-	void LoadScene(std::vector<Mesh> &meshList, TextureObjects& textureObjects);
+	Scene(const VulkanRenderData& render_data, DescriptorsHandler* descriptor_handler);
+
+	void PassRenderData(const VulkanRenderData& render_data, DescriptorsHandler* descriptor_handler);
+
+	void LoadScene(std::vector<Mesh> &mesh_list, TextureObjects& texture_objects);
 
 private:
-	MainDevice*			m_MainDevice;
+	VulkanRenderData	m_RenderData;
 	DescriptorsHandler* m_DescriptorsHandler;
-	VkQueue*			m_GraphicsQueue;
-	CommandHandler*		m_CommandHandler;
 };

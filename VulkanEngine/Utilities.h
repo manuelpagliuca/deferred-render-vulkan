@@ -27,7 +27,7 @@ public:
 	/* BUFFERS */
 	static void CreateBuffer(const MainDevice& main_device, const BufferSettings &buffer_settings, VkBuffer *data, VkDeviceMemory *memory);
 	static void CopyBufferCmd(const VkDevice& logical_device, const VkQueue& transfer_queue, const VkCommandPool& transfer_command_pool, const VkBuffer& src_buffer, const VkBuffer& dst_buffer, const VkDeviceSize &buffer_size);
-	static void CopyImageBuffer(VkDevice &device, VkQueue transferQueue, VkCommandPool transferCommandPool, VkBuffer src, VkImage image, uint32_t width, uint32_t height);
+	static void CopyImageBuffer(const VkDevice& device, const VkQueue& transfer_queue, const VkCommandPool& transfer_command_pool, const VkBuffer& src, const VkImage& image, const uint32_t width, const uint32_t height);
 
 	/* DYNAMIC UBO (SE NECESSARIO FARE UNA CLASSE PER I D-UBO)*/
 	//static Model* AllocateDynamicBufferTransferSpace(VkDeviceSize minUniformBufferOffset);
@@ -52,12 +52,12 @@ public:
 	static VkShaderModule CreateShaderModule(const VkDevice& device, const std::vector<char>& code);
 
 	/* TEXTURE */
+	static int CreateTextureImage(MainDevice& mainDevice, TextureObjects& textureObjects, VkQueue& graphicsQueue, VkCommandPool& graphicsCommandPool, std::string fileName);
 	static int CreateTexture(
 		MainDevice& main_device, VkDescriptorPool& texture_pool, VkDescriptorSetLayout& texture_layout,
 		TextureObjects& texture_objects, VkQueue& graphics_queue,
 		VkCommandPool& graphics_command_pool,
 		std::string fileName);
-	static int CreateTextureImage(MainDevice& mainDevice, TextureObjects& textureObjects, VkQueue& graphicsQueue, VkCommandPool& graphicsCommandPool, std::string fileName);
 	static stbi_uc* LoadTextureFile(const std::string &fileName, int* width, int* height, VkDeviceSize* imageSize);
 	static void TransitionImageLayout(const VkDevice& device, const VkQueue& queue, const VkCommandPool& command_pool, 
 		const VkImage& image, const VkImageLayout& old_layout,	const VkImageLayout& new_layout);

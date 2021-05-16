@@ -16,25 +16,25 @@ void GUI::Init()
 
 	ImGui_ImplGlfw_InitForVulkan(m_Window, true);
 	init_info.Instance			= m_Data.instance;
-	init_info.PhysicalDevice	= m_Data.physicalDevice;
+	init_info.PhysicalDevice	= m_Data.physical_device;
 	init_info.Device			= m_Data.device;
 	init_info.PipelineCache		= VK_NULL_HANDLE;
 	init_info.Allocator			= nullptr;
-	init_info.QueueFamily		= m_Data.graphicQueueIndex;
-	init_info.Queue				= m_Data.graphicQueue;
-	init_info.DescriptorPool	= m_Data.imguiDescriptorPool;
-	init_info.MinImageCount		= m_Data.minImageCount;
-	init_info.ImageCount		= m_Data.imageCount;
+	init_info.QueueFamily		= m_Data.graphic_queue_index;
+	init_info.Queue				= m_Data.graphic_queue;
+	init_info.DescriptorPool	= m_Data.imgui_descriptor_pool;
+	init_info.MinImageCount		= m_Data.min_image_count;
+	init_info.ImageCount		= m_Data.image_count;
 	init_info.CheckVkResultFn	= nullptr;
 }
 
 void GUI::LoadFontsToGPU()
 {
-	ImGui_ImplVulkan_Init(&init_info, m_Data.renderPass);
+	ImGui_ImplVulkan_Init(&init_info, m_Data.render_pass);
 
-	VkCommandPool command_pool = m_Data.commandPool;
+	VkCommandPool command_pool = m_Data.command_pool;
 
-	VkCommandBuffer command_buffer = m_Data.commandBuffers[0];
+	VkCommandBuffer command_buffer = m_Data.command_buffers[0];
 
 	vkResetCommandPool(m_Data.device, command_pool, 0);
 	VkCommandBufferBeginInfo begin_info = {};
@@ -49,7 +49,7 @@ void GUI::LoadFontsToGPU()
 	end_info.commandBufferCount = 1;
 	end_info.pCommandBuffers = &command_buffer;
 	vkEndCommandBuffer(command_buffer);
-	vkQueueSubmit(m_Data.graphicQueue, 1, &end_info, VK_NULL_HANDLE);
+	vkQueueSubmit(m_Data.graphic_queue, 1, &end_info, VK_NULL_HANDLE);
 	vkDeviceWaitIdle(m_Data.device);
 	ImGui_ImplVulkan_DestroyFontUploadObjects();
 }

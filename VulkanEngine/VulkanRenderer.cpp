@@ -15,7 +15,6 @@ VulkanRenderer::VulkanRenderer()
 	m_UBOViewProjection.view			= glm::mat4(1.f);
 	m_MainDevice.MinUniformBufferOffset	= 0;
 	
-	m_Scene				 = Scene(&m_MainDevice, &m_DescriptorsHandler, &m_GraphicsQueue, &m_CommandHandler);
 	m_RenderPassHandler  = RenderPassHandler(&m_MainDevice, &m_SwapChainHandler);
 	m_DescriptorsHandler = DescriptorsHandler(&m_MainDevice.LogicalDevice);
 }
@@ -67,6 +66,7 @@ int VulkanRenderer::Init(void* t_window)
 		CreateSynchronisation();
 		SetViewProjectionData();
 
+		m_Scene.PassRenderData(GetRenderData(), &m_DescriptorsHandler);
 		m_Scene.LoadScene(m_MeshList, m_TextureObjects);
 	}
 	catch (std::runtime_error& e)
@@ -613,17 +613,18 @@ void VulkanRenderer::Cleanup()
 const VulkanRenderData VulkanRenderer::GetRenderData()
 {
 	VulkanRenderData data = {};
+	data.main_device			= m_MainDevice;
 	data.instance				= m_VulkanInstance;
-	data.physicalDevice			= m_MainDevice.PhysicalDevice;
+	data.physical_device		= m_MainDevice.PhysicalDevice;
 	data.device					= m_MainDevice.LogicalDevice;
-	data.graphicQueueIndex		= m_QueueFamilyIndices.GraphicsFamily;
-	data.graphicQueue			= m_GraphicsQueue;
-	data.imguiDescriptorPool	= m_DescriptorsHandler.GetImguiDescriptorPool();
-	data.minImageCount			= 3;	// setup correct practice
-	data.imageCount				= 3;	// setup correct practice
-	data.renderPass				= m_RenderPassHandler.GetRenderPass();
-	data.commandPool			= m_CommandHandler.GetCommandPool();
-	data.commandBuffers			= m_CommandHandler.GetCommandBuffers();
+	data.graphic_queue_index	= m_QueueFamilyIndices.GraphicsFamily;
+	data.graphic_queue			= m_GraphicsQueue;
+	data.imgui_descriptor_pool	= m_DescriptorsHandler.GetImguiDescriptorPool();
+	data.min_image_count		= 3;	// setup correct practice
+	data.image_count			= 3;	// setup correct practice
+	data.render_pass			= m_RenderPassHandler.GetRenderPass();
+	data.command_pool			= m_CommandHandler.GetCommandPool();
+	data.command_buffers		= m_CommandHandler.GetCommandBuffers();
 
 	return data;
 }
