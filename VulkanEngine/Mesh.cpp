@@ -74,18 +74,16 @@ void Mesh::createIndexBuffer(VkQueue transferQueue, VkCommandPool transferComman
 	buffer_settings.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 	buffer_settings.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-
-
 	Utility::CreateBuffer(m_MainDevice, buffer_settings, &staging_buffer, &stagingBufferMemory);
 
 	// Mapping della memoria per l'index buffer
 	void* data;
-	vkMapMemory(m_MainDevice.LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data); // 2. Creao le associazioni (mapping) tra la memoria del vertex buffer ed il pointer
-	memcpy(data, indices->data(), static_cast<size_t>(bufferSize));			 // 3. Copio il vettore dei vertici in un punto in memoria
-	vkUnmapMemory(m_MainDevice.LogicalDevice, stagingBufferMemory);						 // 4. Disassocio il vertice dalla memoria
+	vkMapMemory(m_MainDevice.LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);  // 2. Creao le associazioni (mapping) tra la memoria del vertex buffer ed il pointer
+	memcpy(data, indices->data(), static_cast<size_t>(bufferSize));							// 3. Copio il vettore dei vertici in un punto in memoria
+	vkUnmapMemory(m_MainDevice.LogicalDevice, stagingBufferMemory);							// 4. Disassocio il vertice dalla memoria
 
-	buffer_settings.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-	buffer_settings.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	buffer_settings.usage		= VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+	buffer_settings.properties	= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
 	// Creazione del buffer per Index Data sulla GPU
 	Utility::CreateBuffer(m_MainDevice, buffer_settings, &m_indexBuffer, &m_indexBufferMemory);

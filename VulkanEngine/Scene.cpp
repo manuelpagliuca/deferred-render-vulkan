@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "Scene.h"
+#include "Cube.h"
 
 Scene::Scene()
 {
@@ -55,6 +56,11 @@ void Scene::LoadScene(std::vector<Mesh> &meshList, TextureObjects &textureObject
 		m_RenderData.main_device,
 		m_RenderData.graphic_queue, m_RenderData.command_pool,
 		&meshVertices2, &meshIndices, giraffeTexture));
+
+	Cube cube;
+	meshList.push_back(Mesh(m_RenderData.main_device,
+		m_RenderData.graphic_queue, m_RenderData.command_pool,
+		&cube.GetVertexData(), &cube.GetIndexData(), NULL));
 
 	glm::mat4 meshModelMatrix = meshList[0].getModel().model;
 	meshModelMatrix = glm::rotate(meshModelMatrix, glm::radians(45.f), glm::vec3(.0f, .0f, 1.0f));

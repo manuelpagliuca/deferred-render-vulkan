@@ -88,6 +88,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CommandHandler.cpp" />
+    <ClCompile Include="Cube.cpp" />
     <ClCompile Include="DebugMessanger.cpp" />
     <ClCompile Include="DescriptorsHandler.cpp" />
     <ClCompile Include="GraphicPipeline.cpp" />
@@ -119,6 +120,7 @@
     <ClInclude Include="DescriptorsHandler.h" />
     <ClInclude Include="GraphicPipeline.h" />
     <ClInclude Include="GUI.h" />
+    <ClInclude Include="Cube.h" />
     <ClInclude Include="imconfig.h" />
     <ClInclude Include="imgui.h" />
     <ClInclude Include="imgui_impl_glfw.h" />

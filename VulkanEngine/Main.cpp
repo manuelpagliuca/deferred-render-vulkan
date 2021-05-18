@@ -58,16 +58,20 @@ int main(void)
 
 		glm::mat4 firstModel(1.0f);
 		glm::mat4 secondModel(1.0f);
-
+		glm::mat4 thirdModel(1.0f);
 		firstModel	= glm::translate(firstModel, glm::vec3(0.0f, 0.0f, -2.5f));
 		firstModel	= glm::rotate(firstModel, glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f));
 
 		secondModel = glm::translate(secondModel, glm::vec3(0.0f, 0.0f, angle));
 		secondModel = glm::rotate(secondModel, glm::radians(-angle * 10), glm::vec3(0.0f, 0.0f, 1.0f));
 
+		thirdModel = glm::rotate(thirdModel, glm::radians(-angle * 10), glm::vec3(1.0f, 1.0f, 0.0f));
+
 		vulkanRenderer->UpdateModel(0, firstModel);
 		vulkanRenderer->UpdateModel(1, secondModel);
-				
+		vulkanRenderer->UpdateModel(2, thirdModel);
+
+
 		GUI::GetInstance()->Render();
 		auto draw_data = GUI::GetInstance()->GetDrawData();
 		
