@@ -304,8 +304,8 @@ VkImageView Utility::CreateImageView(const VkDevice& logical_device, const VkIma
 	viewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
 	viewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
 
-	// L'intervallo delle sottorisorse dicono all'ImageView quale parte dell'immagine visualizzare
-	viewCreateInfo.subresourceRange.aspectMask		= aspect_flags; // Quale aspetto dell'immagine visualizzare (COLOR, DEPTH, STENCIL)
+	// subresourceRange : dice all'ImageView quale parte dell'image visualizzare
+	viewCreateInfo.subresourceRange.aspectMask		= aspect_flags;	 // Quale aspetto dell'immagine visualizzare (COLOR, DEPTH, STENCIL)
 	viewCreateInfo.subresourceRange.baseMipLevel	= 0;			 // Livello iniziale della mipmap (primo mipmap level)
 	viewCreateInfo.subresourceRange.levelCount		= 1;			 // Numero di livelli mipmap da visualizzare
 	viewCreateInfo.subresourceRange.baseArrayLayer	= 0;			 // Livello iniziale del primo arrayLayer (primo arrayLayer)

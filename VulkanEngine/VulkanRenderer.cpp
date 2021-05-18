@@ -68,6 +68,7 @@ int VulkanRenderer::Init(void* t_window)
 
 		m_Scene.PassRenderData(GetRenderData(), &m_DescriptorsHandler);
 		m_Scene.LoadScene(m_MeshList, m_TextureObjects);
+		CreateMeshModel("Models/Moon 2K.obj");
 	}
 	catch (std::runtime_error& e)
 	{
@@ -103,7 +104,7 @@ void VulkanRenderer::Draw(ImDrawData *draw_data)
 
 	
 	m_CommandHandler.RecordCommands(draw_data, imageIndex, m_SwapChainHandler.GetExtent(),
-		m_SwapChainHandler.GetFrameBuffers(), m_MeshList, m_TextureObjects, m_DescriptorsHandler.GetDescriptorSets());
+		m_SwapChainHandler.GetFrameBuffers(), m_MeshList, m_MeshModelList, m_TextureObjects, m_DescriptorsHandler.GetDescriptorSets());
 	
 
 	// Copia nell'UniformBuffer della GPU le matrici m_uboViewProjection
@@ -265,6 +266,51 @@ void VulkanRenderer::LoadGlfwExtensions(std::vector<const char*>& instanceExtens
 	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount); 
 	for (size_t i = 0; i < glfwExtensionCount; ++i)							 
 		instanceExtensions.push_back(glfwExtensions[i]);
+}
+
+void VulkanRenderer::CreateMeshModel(const std::string& file)
+{
+	// Import model scene
+	Assimp::Importer importer;
+
+	// aiProcess_Triangulate tutti gli oggetti vengono rappresentati come triangoli
+	// aiProcess_FlipUVs : inverte i texels in modo che possano funzionare con Vulkan
+	// aiProcess_JoinIdenticalVertices : 
+	const aiScene* scene = importer.ReadFile(file, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_JoinIdenticalVertices);
+	
+	if (!scene)
+	{
+		throw std::runtime_error("Failed to load model! (" + file + ")");
+	}
+
+	// Caricamento delle texture (materials della scena)
+	std::vector<std::string> texture_names = MeshModel::LoadMaterials(scene);
+
+	// Mapping degli ID texture con gli ID dei descirptor 
+	std::vector<int> mat_to_tex(texture_names.size());
+
+	for (size_t i = 0; i < texture_names.size(); i++)
+	{
+		if (texture_names[i].empty())
+		{
+			mat_to_tex[i] = 0;
+		}
+		else
+		{
+			mat_to_tex[i] = Utility::CreateTexture(
+				m_MainDevice, 
+				m_DescriptorsHandler.GetTexturePool(),
+				m_DescriptorsHandler.GetTextureDescriptorSetLayout(),
+				m_TextureObjects, m_GraphicsQueue, m_CommandHandler.GetCommandPool(), texture_names[i]);
+		}
+	}
+
+	std::vector<Mesh> model_meshes = MeshModel::LoadNode(m_MainDevice.PhysicalDevice, m_MainDevice.LogicalDevice,
+		m_GraphicsQueue, m_CommandHandler.GetCommandPool(), scene->mRootNode, scene, mat_to_tex);
+
+	MeshModel mesh_Model = MeshModel(model_meshes);
+	m_MeshModelList.push_back(mesh_Model);
+
 }
 
 bool VulkanRenderer::CheckInstanceExtensionSupport(std::vector<const char*>* extensionsToCheck)
@@ -553,6 +599,11 @@ void VulkanRenderer::Cleanup()
 	// e di presentazione potrebbero ancora essere in corso ed eliminare le risorse mentre esse sono in corso è una pessima idea
 	// quindi è corretto aspettare che il dispositivo sia inattivo prima di eliminare gli oggetti.
 	vkDeviceWaitIdle(m_MainDevice.LogicalDevice);
+
+	for (size_t i = 0; i < m_MeshModelList.size(); i++)
+	{
+		m_MeshModelList[i].DestroyMeshModel();
+	}
 
 	GUI::GetInstance()->Destroy();
 

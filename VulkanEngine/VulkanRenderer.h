@@ -14,6 +14,11 @@
 #include "Scene.h"
 #include "GUI.h"
 
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+#include "MeshModel.h"
+
 class VulkanRenderer
 {
 public:
@@ -65,6 +70,8 @@ private:
 
 private:
 	std::vector<Mesh> m_MeshList;
+	std::vector<MeshModel> m_MeshModelList;
+
 	UboViewProjection m_UBOViewProjection;
 
 	/* Core Renderer Functions */
@@ -74,6 +81,9 @@ private:
 	void CreateLogicalDevice();	
 	void CreateSurface();
 	void CreateSynchronisation();
+
+
+	void CreateMeshModel(const std::string& file);
 
 	/* Auxiliary function for creation */
 	void LoadGlfwExtensions(std::vector<const char*>& instanceExtensions);

@@ -65,4 +65,7 @@ void Scene::LoadScene(std::vector<Mesh> &meshList, TextureObjects &textureObject
 	glm::mat4 meshModelMatrix = meshList[0].getModel().model;
 	meshModelMatrix = glm::rotate(meshModelMatrix, glm::radians(45.f), glm::vec3(.0f, .0f, 1.0f));
 	meshList[0].setModel(meshModelMatrix);
+
+	
+
 }

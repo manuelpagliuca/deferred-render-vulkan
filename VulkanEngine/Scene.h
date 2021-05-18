@@ -5,6 +5,8 @@
 #include "CommandHandler.h"
 #include "Mesh.h"
 
+#include "MeshModel.h"
+
 class Scene
 {
 public:

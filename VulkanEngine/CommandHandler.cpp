@@ -52,7 +52,7 @@ void CommandHandler::CreateCommandBuffers(size_t const numFrameBuffers)
 }
 
 void CommandHandler::RecordCommands(ImDrawData* draw_data, uint32_t currentImage, VkExtent2D &imageExtent, std::vector<VkFramebuffer> &frameBuffers,
-	std::vector<Mesh> &meshList, TextureObjects & textureObjects, std::vector<VkDescriptorSet> &descriptorSets)
+	std::vector<Mesh> &meshList, std::vector<MeshModel>& modelList, TextureObjects & textureObjects, std::vector<VkDescriptorSet> &descriptorSets)
 {
 	// Informazioni sul come inizializzare ogni Command Buffer
 	VkCommandBufferBeginInfo bufferBeginInfo = {};
@@ -94,8 +94,43 @@ void CommandHandler::RecordCommands(ImDrawData* draw_data, uint32_t currentImage
 	// (È possibile impostare molteplici pipeline e switchare, per esempio una versione DEFERRED o WIREFRAME)
 	vkCmdBindPipeline(m_CommandBuffers[currentImage], VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicPipeline->GetPipeline());
 
-	for (size_t j = 0; j < meshList.size(); ++j)
+
+
+	for (size_t j = 0; j <  modelList.size(); ++j)
 	{
+		MeshModel mesh_model = modelList[j];
+		//Model m = mesh_model.GetModel();// meshList[j].getModel();
+		Model m;
+		m.model = mesh_model.GetModel();
+
+		vkCmdPushConstants(m_CommandBuffers[currentImage], m_GraphicPipeline->GetLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Model), &m);
+
+		for (size_t k = 0; k < mesh_model.GetMeshCount(); k++)
+		{
+
+			VkBuffer vertexBuffers[] = { mesh_model.GetMesh(k)->getVertexBuffer() }; // Buffer da bindare prima di essere disegnati
+			VkDeviceSize offsets[] = { 0 };
+
+			// Binding del Vertex Buffer di una Mesh ad un Command Buffer
+			vkCmdBindVertexBuffers(m_CommandBuffers[currentImage], 0, 1, vertexBuffers, offsets);
+
+			// Bind del Index Buffer di una Mesh ad un Command Buffer, con offset 0 ed usando uint_32
+			vkCmdBindIndexBuffer(m_CommandBuffers[currentImage], mesh_model.GetMesh(k)->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+			
+			std::array<VkDescriptorSet, 2> descriptorSetGroup = { descriptorSets[currentImage], textureObjects.SamplerDescriptorSets[mesh_model.GetMesh(k)->getTexID()] };
+
+			// Binding del Descriptor Set ad un Command Buffer DYNAMIC UBO
+			//uint32_t dynamicOffset = static_cast<uint32_t>(m_modelUniformAlignment) * static_cast<uint32_t>(j);
+
+			vkCmdBindDescriptorSets(m_CommandBuffers[currentImage], VK_PIPELINE_BIND_POINT_GRAPHICS,
+				m_GraphicPipeline->GetLayout(), 0, static_cast<uint32_t>(descriptorSetGroup.size()), descriptorSetGroup.data(), 0, nullptr);
+
+			// Invia un Comando di IndexedDraw ad un Command Buffer
+			vkCmdDrawIndexed(m_CommandBuffers[currentImage], mesh_model.GetMesh(k)->getIndexCount(), 1, 0, 0, 0);
+		}
+
+		/*
+
 		VkBuffer vertexBuffers[] = { meshList[j].getVertexBuffer() }; // Buffer da bindare prima di essere disegnati
 		VkDeviceSize offsets[] = { 0 };
 
@@ -104,10 +139,6 @@ void CommandHandler::RecordCommands(ImDrawData* draw_data, uint32_t currentImage
 
 		// Bind del Index Buffer di una Mesh ad un Command Buffer, con offset 0 ed usando uint_32
 		vkCmdBindIndexBuffer(m_CommandBuffers[currentImage], meshList[j].getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
-
-		Model m = meshList[j].getModel();
-
-		vkCmdPushConstants(m_CommandBuffers[currentImage], m_GraphicPipeline->GetLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Model), &m);
 
 		std::array<VkDescriptorSet, 2> descriptorSetGroup = { descriptorSets[currentImage], textureObjects.SamplerDescriptorSets[meshList[j].getTexID()] };
 
@@ -119,6 +150,7 @@ void CommandHandler::RecordCommands(ImDrawData* draw_data, uint32_t currentImage
 
 		// Invia un Comando di IndexedDraw ad un Command Buffer
 		vkCmdDrawIndexed(m_CommandBuffers[currentImage], meshList[j].getIndexCount(), 1, 0, 0, 0);
+		*/
 	}
 
 	ImGui_ImplVulkan_RenderDrawData(draw_data, m_CommandBuffers[currentImage]);

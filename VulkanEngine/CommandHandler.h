@@ -4,6 +4,7 @@
 
 #include "GraphicPipeline.h"
 #include "Mesh.h"
+#include "MeshModel.h"
 
 struct RecordObjects {
 	TextureObjects TextureObjects;
@@ -18,7 +19,7 @@ public:
 	void CreateCommandPool(QueueFamilyIndices& queueIndices);
 	void CreateCommandBuffers(size_t const numFrameBuffers);
 	void RecordCommands(ImDrawData* draw_data, uint32_t currentImage, VkExtent2D& imageExtent, std::vector<VkFramebuffer>& frameBuffers,
-		std::vector<Mesh>& meshList, TextureObjects& textureObjects, std::vector<VkDescriptorSet>& descriptorSets);
+		std::vector<Mesh>& meshList, std::vector<MeshModel>& modelList, TextureObjects& textureObjects, std::vector<VkDescriptorSet>& descriptorSets);
 
 	void DestroyCommandPool();
 	void FreeCommandBuffers();
