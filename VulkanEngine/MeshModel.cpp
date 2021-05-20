@@ -52,6 +52,8 @@ std::vector<std::string> MeshModel::LoadMaterials(const aiScene* scene)
 
 		texture_list[i] = "";
 
+		//material->Get(AI_MATKEY_TEXTURE(aitexc))
+
 
 		// Controllo l'esistenza di una texture diffusa (colore semplice)
 		if (material->GetTextureCount(aiTextureType_DIFFUSE))
@@ -66,6 +68,36 @@ std::vector<std::string> MeshModel::LoadMaterials(const aiScene* scene)
 				texture_list[i] = file_name;
 			}
 		}
+
+		// Controllo l'esistenza di una texture diffusa (colore semplice)
+		if (material->GetTextureCount(aiTextureType_BASE_COLOR))
+		{
+			// Prelevamento della path
+			aiString path;
+			if (material->GetTexture(aiTextureType_BASE_COLOR, 0, &path) == AI_SUCCESS)
+			{
+				// Eliminazione delle relative paths
+				const int idx = std::string(path.data).rfind("\\");
+				std::string file_name = std::string(path.data).substr(idx + 1);
+				texture_list[i] = file_name;
+			}
+		}
+
+		// Controllo l'esistenza di una texture diffusa (colore semplice)
+		if (material->GetTextureCount(aiTextureType_AMBIENT))
+		{
+			// Prelevamento della path
+			aiString path;
+			if (material->GetTexture(aiTextureType_AMBIENT, 0, &path) == AI_SUCCESS)
+			{
+				// Eliminazione delle relative paths
+				const int idx = std::string(path.data).rfind("\\");
+				std::string file_name = std::string(path.data).substr(idx + 1);
+				texture_list[i] = file_name;
+			}
+		}
+
+
 
 		// Se non è presente alcuna texture, utilizza miss.png
 		if (texture_list[i].empty())

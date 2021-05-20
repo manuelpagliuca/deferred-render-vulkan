@@ -17,6 +17,8 @@ VulkanRenderer::VulkanRenderer()
 	
 	m_RenderPassHandler  = RenderPassHandler(&m_MainDevice, &m_SwapChainHandler);
 	m_DescriptorsHandler = DescriptorsHandler(&m_MainDevice.LogicalDevice);
+
+	Utility::Setup(&m_MainDevice, &m_Surface, &m_CommandHandler.GetCommandPool(), &m_GraphicsQueue);
 }
 
 int VulkanRenderer::Init(void* t_window)
@@ -31,7 +33,6 @@ int VulkanRenderer::Init(void* t_window)
 
 	try
 	{
-		Utility::Setup(&m_MainDevice, &m_Surface, &m_CommandHandler.GetCommandPool(), &m_GraphicsQueue);
 		CreateRenderKernel();
 
 		m_SwapChainHandler	= SwapChainHandler(m_MainDevice, m_Surface, m_Window, m_QueueFamilyIndices);
@@ -73,7 +74,11 @@ int VulkanRenderer::Init(void* t_window)
 		m_Scene.LoadScene(m_MeshList, m_TextureObjects);
 
 		CreateMeshModel("Models/Vivi_Final.obj");
+		CreateMeshModel("Models/Vivi_Final.obj");
+		CreateMeshModel("Models/Vivi_Final.obj");
+		//CreateMeshModel("Models/Blacksmith.fbx");
 		//CreateMeshModel("Models/t-rex-triceratops-combined-400k.obj");
+
 
 	}
 	catch (std::runtime_error& e)
