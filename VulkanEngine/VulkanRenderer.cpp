@@ -31,6 +31,7 @@ int VulkanRenderer::Init(void* t_window)
 
 	try
 	{
+		Utility::Setup(&m_MainDevice, &m_Surface, &m_CommandHandler.GetCommandPool(), &m_GraphicsQueue);
 		CreateRenderKernel();
 
 		m_SwapChainHandler	= SwapChainHandler(m_MainDevice, m_Surface, m_Window, m_QueueFamilyIndices);
@@ -47,7 +48,7 @@ int VulkanRenderer::Init(void* t_window)
 
 		m_GraphicPipeline	= GraphicPipeline(m_MainDevice, m_SwapChainHandler, &m_RenderPassHandler, vpDescSet, texDesSet, m_PushCostantRange);
 
-		Utility::CreateDepthBufferImage(m_DepthBufferImage, m_MainDevice, m_SwapChainHandler.GetExtent());
+		Utility::CreateDepthBufferImage(m_DepthBufferImage, m_SwapChainHandler.GetExtent());
 
 		m_SwapChainHandler.SetRenderPass(m_RenderPassHandler.GetRenderPassReference());
 
@@ -200,7 +201,7 @@ void VulkanRenderer::HandleMinimization()
 
 	m_GraphicPipeline.CreateGraphicPipeline();
 
-	Utility::CreateDepthBufferImage(m_DepthBufferImage, m_MainDevice, m_SwapChainHandler.GetExtent());
+	Utility::CreateDepthBufferImage(m_DepthBufferImage, m_SwapChainHandler.GetExtent());
 
 	m_SwapChainHandler.CreateFrameBuffers(m_DepthBufferImage.ImageView);
 
@@ -414,10 +415,10 @@ bool VulkanRenderer::CheckDeviceSuitable(VkPhysicalDevice possibleDevice)
 	*/
 
 	// Preleva dal dispositivo fisico gli indici delle QueueFamily per la Grafica e la Presentazione
-	Utility::GetQueueFamilyIndices(possibleDevice, m_Surface, m_QueueFamilyIndices);
+	Utility::GetPossibleQueueFamilyIndices(possibleDevice, m_QueueFamilyIndices);
 
 	// Controlla che le estensioni richieste siano disponibili nel dispositivo fisico
-	bool const extensionSupported = Utility::CheckDeviceExtensionSupport(possibleDevice, m_RequestedDeviceExtensions);
+	bool const extensionSupported = Utility::CheckPossibleDeviceExtensionSupport(possibleDevice, m_RequestedDeviceExtensions);
 
 
 	bool swapChainValid	= false;
@@ -554,7 +555,7 @@ void VulkanRenderer::CreateUniformBuffers()
 
 	for (size_t i = 0; i < m_SwapChainHandler.SwapChainImagesSize(); i++)
 	{
-		Utility::CreateBuffer(m_MainDevice, buffer_settings, &m_viewProjectionUBO[i], &m_viewProjectionUniformBufferMemory[i]);
+		Utility::CreateBuffer(buffer_settings, &m_viewProjectionUBO[i], &m_viewProjectionUniformBufferMemory[i]);
 		/* DYNAMIC UBO
 		createBuffer(m_mainDevice.physicalDevice, m_mainDevice.LogicalDevice,
 			modelBufferSize,

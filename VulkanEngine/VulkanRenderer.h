@@ -35,7 +35,7 @@ public:
 
 private:
 	VkInstance			m_VulkanInstance;
-	MainDevice			m_MainDevice;
+	MainDevice	m_MainDevice;
 	VkSurfaceKHR		m_Surface;	
 	GLFWwindow*			m_Window = nullptr;
 	SwapChainHandler	m_SwapChainHandler;

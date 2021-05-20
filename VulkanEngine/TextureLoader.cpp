@@ -8,7 +8,7 @@ int TextureLoader::CreateTexture(const std::string& file_name)
 	m_FileName = file_name;
 
 	int const texture_image_location = CreateTextureImage();
-	const VkImageView image_view = Utility::CreateImageView(m_MainDevice.LogicalDevice, m_TextureObjects->TextureImages[texture_image_location], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
+	const VkImageView image_view = Utility::CreateImageView(m_TextureObjects->TextureImages[texture_image_location], VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
 
 	m_TextureObjects->TextureImageViews.push_back(image_view);
 
@@ -27,7 +27,7 @@ int TextureLoader::CreateTextureImage()
 
 	// Descrive la pipeline barrier che deve rispettare la queue
 	TransitionImageLayout(texture_image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		Utility::CopyImageBuffer(m_MainDevice.LogicalDevice, m_GraphicsQueue, m_CommandPool, m_StagingBuffer, texture_image, m_Width, m_Height);
+		Utility::CopyImageBuffer(m_StagingBuffer, texture_image, m_Width, m_Height);
 	TransitionImageLayout(texture_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	m_TextureObjects->TextureImages.push_back(texture_image);
@@ -112,7 +112,7 @@ void TextureLoader::CreateTextureBuffer()
 	m_BufferSettings.usage		= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 	m_BufferSettings.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-	Utility::CreateBuffer(m_MainDevice, m_BufferSettings, &m_StagingBuffer, &m_StagingBufferMemory);
+	Utility::CreateBuffer(m_BufferSettings, &m_StagingBuffer, &m_StagingBufferMemory);
 
 	// copy image data to staging buffer
 	void* data;
@@ -134,12 +134,12 @@ VkImage TextureLoader::CreateImage(VkDeviceMemory *m_TextureImageMemory)
 	image_info.usage		= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 	image_info.properties	= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-	return Utility::CreateImage(m_MainDevice, image_info, m_TextureImageMemory);
+	return Utility::CreateImage(image_info, m_TextureImageMemory);
 }
 
 void TextureLoader::TransitionImageLayout(const VkImage& image, const VkImageLayout& old_layout, const VkImageLayout& new_layout)
 {
-	VkCommandBuffer command_buffer = Utility::BeginCommandBuffer(m_MainDevice.LogicalDevice, m_CommandPool);
+	VkCommandBuffer command_buffer = Utility::BeginCommandBuffer();
 
 	VkImageMemoryBarrier image_memory_barrier = {};
 	image_memory_barrier.sType								= VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -194,7 +194,7 @@ void TextureLoader::TransitionImageLayout(const VkImage& image, const VkImageLay
 		image_memory_barrier_count, &image_memory_barrier
 	);
 
-	Utility::EndAndSubmitCommandBuffer(m_MainDevice.LogicalDevice, m_CommandPool, m_GraphicsQueue, command_buffer);
+	Utility::EndAndSubmitCommandBuffer(command_buffer);
 }
 
 void TextureLoader::Init(const VulkanRenderData& data, TextureObjects *objs)

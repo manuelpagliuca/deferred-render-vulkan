@@ -4,30 +4,32 @@
 
 #include "Mesh.h"
 
-int constexpr MAX_FRAMES_IN_FLIGHT = 3;
-int constexpr MAX_OBJECTS = 20;
+int constexpr MAX_FRAMES_IN_FLIGHT	= 3;
+int constexpr MAX_OBJECTS			= 20;
 
 class Utility
 {
 public:
+	static void Setup(MainDevice* main_device, VkSurfaceKHR* surface, VkCommandPool* command_pool, VkQueue* queue);
+
 	/* GENERIC */
 	static std::vector<char> ReadFile(const std::string& filename);
-	static VkFormat ChooseSupportedFormat(const MainDevice& main_device, const std::vector<VkFormat>& formats, const VkImageTiling &tiling, const VkFormatFeatureFlags &feature_flags);
-	static void GetQueueFamilyIndices(const VkPhysicalDevice &physical_device, const VkSurfaceKHR& surface, QueueFamilyIndices& queue_family_indices);
-	static bool CheckDeviceExtensionSupport(const VkPhysicalDevice& device, const std::vector<const char*>& requested_device_extensions);
+	static VkFormat ChooseSupportedFormat(const std::vector<VkFormat>& formats, const VkImageTiling& tiling, const VkFormatFeatureFlags& features);
+	static void GetPossibleQueueFamilyIndices(const VkPhysicalDevice& potential_phys_dev, QueueFamilyIndices& family_indices);
+	static bool CheckPossibleDeviceExtensionSupport(const VkPhysicalDevice& potential_phys_dev, const std::vector<const char*>& requested_dev_ext);
 
 	/* IMAGES */
-	static VkImage CreateImage(const MainDevice &main_device, const ImageInfo& image_info, VkDeviceMemory* image_memory);
-	static VkImageView CreateImageView(const VkDevice& logical_device, const VkImage& image, const VkFormat& format, const VkImageAspectFlags& aspect_flags);
-	static void CreateDepthBufferImage(DepthBufferImage& image, const MainDevice& main_device, const VkExtent2D &img_extent);
+	static VkImage CreateImage(const ImageInfo& image_info, VkDeviceMemory* image_memory);
+	static VkImageView CreateImageView(const VkImage& image, const VkFormat& format, const VkImageAspectFlags& aspect_flags);
+	static void CreateDepthBufferImage(DepthBufferImage& image, const VkExtent2D &img_extent);
 
 	/* MEMORY */
-	static uint32_t FindMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t supportedMemoryTypes, VkMemoryPropertyFlags properties);
+	static uint32_t FindMemoryTypeIndex(uint32_t supportedMemoryTypes, const VkMemoryPropertyFlags& properties);
 	
 	/* BUFFERS */
-	static void CreateBuffer(const MainDevice& main_device, const BufferSettings &buffer_settings, VkBuffer *data, VkDeviceMemory *memory);
-	static void CopyBufferCmd(const VkDevice& logical_device, const VkQueue& transfer_queue, const VkCommandPool& transfer_command_pool, const VkBuffer& src_buffer, const VkBuffer& dst_buffer, const VkDeviceSize &buffer_size);
-	static void CopyImageBuffer(const VkDevice& device, const VkQueue& transfer_queue, const VkCommandPool& transfer_command_pool, const VkBuffer& src, const VkImage& image, const uint32_t width, const uint32_t height);
+	static void CreateBuffer(const BufferSettings& buffer_settings, VkBuffer* data, VkDeviceMemory* memory);
+	static void CopyBufferCmd(const VkBuffer& src_buffer, const VkBuffer& dst_buffer, const VkDeviceSize& buffer_size);
+	static void CopyImageBuffer(const VkBuffer& src, const VkImage& image, const uint32_t width, const uint32_t height);
 
 	/* DYNAMIC UBO (SE NECESSARIO FARE UNA CLASSE PER I D-UBO)*/
 	//static Model* AllocateDynamicBufferTransferSpace(VkDeviceSize minUniformBufferOffset);
@@ -43,13 +45,18 @@ public:
 		vkFreeMemory(m_mainDevice.LogicalDevice, m_modelDynamicUniformBufferMemory[i], nullptr);
 	}*/
 
-
 	/* COMMAND BUFFER */
-	static VkCommandBuffer BeginCommandBuffer(const VkDevice& device, const VkCommandPool& commandPool);
-	static void EndAndSubmitCommandBuffer(const VkDevice& device, const VkCommandPool& command_pool, const VkQueue& queue, const VkCommandBuffer& command_buffer);
+	static VkCommandBuffer BeginCommandBuffer();
+	static void EndAndSubmitCommandBuffer(const VkCommandBuffer& command_buffer);
 
 	/* SHADERS */
-	static VkShaderModule CreateShaderModule(const VkDevice& device, const std::vector<char>& code);
+	static VkShaderModule CreateShaderModule(const std::vector<char>& code);
+
 private:
-	Utility();
+	Utility() = default;
+
+	static MainDevice*		m_MainDevice;
+	static VkSurfaceKHR*	m_Surface;
+	static VkCommandPool*	m_CommandPool;
+	static VkQueue*			m_GraphicsQueue;
 };

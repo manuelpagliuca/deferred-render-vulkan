@@ -84,7 +84,7 @@ void GraphicPipeline::CreateGraphicPipeline()
 VkShaderModule GraphicPipeline::CreateShaderModules(const char* path)
 {
 	std::vector<char> shaderCode = Utility::ReadFile(path);
-	return Utility::CreateShaderModule(m_MainDevice.LogicalDevice, shaderCode);
+	return Utility::CreateShaderModule(shaderCode);
 }
 
 void GraphicPipeline::DestroyShaderModules()

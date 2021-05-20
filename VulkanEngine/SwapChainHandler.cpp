@@ -211,7 +211,7 @@ void SwapChainHandler::CreateSwapChain()
 			SwapChainImage swapChainImage = {};
 
 			swapChainImage.image	 = image;
-			swapChainImage.imageView = Utility::CreateImageView(m_MainDevice.LogicalDevice, image, m_SwapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+			swapChainImage.imageView = Utility::CreateImageView(image, m_SwapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 
 			m_SwapChainImages.push_back(swapChainImage);
 		}
@@ -219,7 +219,7 @@ void SwapChainHandler::CreateSwapChain()
 	else
 		for (size_t i = 0; i < m_SwapChainImages.size() ; ++i)
 			m_SwapChainImages[i].imageView = 
-			Utility::CreateImageView(m_MainDevice.LogicalDevice, images[i], m_SwapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
+			Utility::CreateImageView(images[i], m_SwapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 	
 }
 

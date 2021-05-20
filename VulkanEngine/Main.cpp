@@ -60,7 +60,7 @@ int main(void)
 		glm::mat4 secondModel(1.0f);
 		glm::mat4 thirdModel(1.0f);
 		firstModel	= glm::translate(firstModel, glm::vec3(0.0f, -1.0f, 0.f));
-		//firstModel	= glm::rotate(firstModel, glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f));
+		firstModel	= glm::rotate(firstModel, glm::radians(angle), glm::vec3(0.0f, 1.0f, 0.0f));
 		//firstModel = glm::scale(firstModel, 100.0f *glm::vec3(1.0f, 1.0f, 1.0f));
 
 		secondModel = glm::translate(secondModel, glm::vec3(0.0f, 0.0f, angle));

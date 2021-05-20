@@ -36,7 +36,7 @@ void Mesh::createVertexBuffer(VkQueue transferQueue, VkCommandPool transferComma
 	// e verranno bypassate tutte le operazioni di caching standard.
 	// Il tipo del buffer è VK_BUFFER_USAGE_TRANSFER_SRC_BIT, significa che serve per effettuare un traferimento
 	// dei dati all'interno del buffer verso un altra locazione.
-	Utility::CreateBuffer(m_MainDevice, buffer_settings, &staging_buffer, &staging_buffer_memory);
+	Utility::CreateBuffer(buffer_settings, &staging_buffer, &staging_buffer_memory);
 
 	//  Mapping della memoria sul Vertex Buffer
 	void* data;																	 // 1. Creazione di un puntatore ad una locazione della memoria normale
@@ -52,11 +52,11 @@ void Mesh::createVertexBuffer(VkQueue transferQueue, VkCommandPool transferComma
 	buffer_settings.usage		= VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	buffer_settings.properties	= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-	Utility::CreateBuffer(m_MainDevice, buffer_settings, &m_vertexBuffer, &m_vertexBufferMemory);
+	Utility::CreateBuffer(buffer_settings, &m_vertexBuffer, &m_vertexBufferMemory);
 
 	// Copia lo staging buffer nel vertex buffer della GPU, è un operazione che viene effettuata attraverso
 	// i CommandBuffer. Ovvero che è veloce perchè viene eseguita dalla GPU.
-	Utility::CopyBufferCmd(m_MainDevice.LogicalDevice, transferQueue, transferCommandPool, staging_buffer, m_vertexBuffer, bufferSize);
+	Utility::CopyBufferCmd(staging_buffer, m_vertexBuffer, bufferSize);
 	
 	vkDestroyBuffer(m_MainDevice.LogicalDevice, staging_buffer, nullptr);
 	vkFreeMemory(m_MainDevice.LogicalDevice, staging_buffer_memory, nullptr);
@@ -74,7 +74,7 @@ void Mesh::createIndexBuffer(VkQueue transferQueue, VkCommandPool transferComman
 	buffer_settings.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 	buffer_settings.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-	Utility::CreateBuffer(m_MainDevice, buffer_settings, &staging_buffer, &stagingBufferMemory);
+	Utility::CreateBuffer(buffer_settings, &staging_buffer, &stagingBufferMemory);
 
 	// Mapping della memoria per l'index buffer
 	void* data;
@@ -86,10 +86,10 @@ void Mesh::createIndexBuffer(VkQueue transferQueue, VkCommandPool transferComman
 	buffer_settings.properties	= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
 	// Creazione del buffer per Index Data sulla GPU
-	Utility::CreateBuffer(m_MainDevice, buffer_settings, &m_indexBuffer, &m_indexBufferMemory);
+	Utility::CreateBuffer(buffer_settings, &m_indexBuffer, &m_indexBufferMemory);
 
 	// Copia dello staging buffer sulla GPU
-	Utility::CopyBufferCmd(m_MainDevice.LogicalDevice, transferQueue, transferCommandPool, staging_buffer, m_indexBuffer, bufferSize);
+	Utility::CopyBufferCmd(staging_buffer, m_indexBuffer, bufferSize);
 
 	// Distruzione dello staging Buffer
 	vkDestroyBuffer(m_MainDevice.LogicalDevice, staging_buffer, nullptr);

@@ -64,7 +64,7 @@ void RenderPassHandler::SetColourAttachment(const VkFormat &imageFormat)
 void RenderPassHandler::SetDepthAttachment()
 {
 	std::vector<VkFormat> formats = { VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D24_UNORM_S8_UINT };
-	m_DepthAttachment.format			= Utility::ChooseSupportedFormat(*m_MainDevice, formats, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+	m_DepthAttachment.format			= Utility::ChooseSupportedFormat(formats, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 	m_DepthAttachment.samples			= VK_SAMPLE_COUNT_1_BIT;
 	m_DepthAttachment.loadOp			= VK_ATTACHMENT_LOAD_OP_CLEAR;
 	m_DepthAttachment.storeOp			= VK_ATTACHMENT_STORE_OP_DONT_CARE;
