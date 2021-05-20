@@ -56,7 +56,7 @@ int VulkanRenderer::Init(void* t_window)
 		m_CommandHandler = CommandHandler(m_MainDevice, &m_GraphicPipeline, m_RenderPassHandler.GetRenderPassReference());
 		m_CommandHandler.CreateCommandPool(m_QueueFamilyIndices);
 		m_CommandHandler.CreateCommandBuffers(m_SwapChainHandler.FrameBuffersSize());
-		m_TextureObjects.CreateTextureSampler(m_MainDevice);
+		m_TextureObjects.CreateSampler(m_MainDevice);
 
 		CreateUniformBuffers();
 
@@ -66,9 +66,14 @@ int VulkanRenderer::Init(void* t_window)
 		CreateSynchronisation();
 		SetViewProjectionData();
 
+
+		TextureLoader::GetInstance()->Init(GetRenderData(), &m_TextureObjects);
 		m_Scene.PassRenderData(GetRenderData(), &m_DescriptorsHandler);
 		m_Scene.LoadScene(m_MeshList, m_TextureObjects);
-		CreateMeshModel("Models/Moon 2K.obj");
+
+		CreateMeshModel("Models/Vivi_Final.obj");
+		//CreateMeshModel("Models/t-rex-triceratops-combined-400k.obj");
+
 	}
 	catch (std::runtime_error& e)
 	{
@@ -82,7 +87,8 @@ void VulkanRenderer::UpdateModel(int modelID, glm::mat4 newModel)
 {
 	if (modelID >= m_MeshList.size())
 		return;
-	m_MeshList[modelID].setModel(newModel);
+	m_MeshModelList[modelID].SetModel(newModel);
+	//m_MeshList[modelID].setModel(newModel);
 }
 
 void VulkanRenderer::Draw(ImDrawData *draw_data)
@@ -104,7 +110,7 @@ void VulkanRenderer::Draw(ImDrawData *draw_data)
 
 	
 	m_CommandHandler.RecordCommands(draw_data, imageIndex, m_SwapChainHandler.GetExtent(),
-		m_SwapChainHandler.GetFrameBuffers(), m_MeshList, m_MeshModelList, m_TextureObjects, m_DescriptorsHandler.GetDescriptorSets());
+	m_SwapChainHandler.GetFrameBuffers(), m_MeshList, m_MeshModelList, m_TextureObjects, m_DescriptorsHandler.GetDescriptorSets());
 	
 
 	// Copia nell'UniformBuffer della GPU le matrici m_uboViewProjection
@@ -276,7 +282,8 @@ void VulkanRenderer::CreateMeshModel(const std::string& file)
 	// aiProcess_Triangulate tutti gli oggetti vengono rappresentati come triangoli
 	// aiProcess_FlipUVs : inverte i texels in modo che possano funzionare con Vulkan
 	// aiProcess_JoinIdenticalVertices : 
-	const aiScene* scene = importer.ReadFile(file, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_JoinIdenticalVertices);
+	const aiScene* scene = importer.ReadFile(file, aiProcess_Triangulate | 
+		aiProcess_FlipUVs | aiProcess_JoinIdenticalVertices);
 	
 	if (!scene)
 	{
@@ -285,6 +292,8 @@ void VulkanRenderer::CreateMeshModel(const std::string& file)
 
 	// Caricamento delle texture (materials della scena)
 	std::vector<std::string> texture_names = MeshModel::LoadMaterials(scene);
+
+
 
 	// Mapping degli ID texture con gli ID dei descirptor 
 	std::vector<int> mat_to_tex(texture_names.size());
@@ -297,11 +306,7 @@ void VulkanRenderer::CreateMeshModel(const std::string& file)
 		}
 		else
 		{
-			mat_to_tex[i] = Utility::CreateTexture(
-				m_MainDevice, 
-				m_DescriptorsHandler.GetTexturePool(),
-				m_DescriptorsHandler.GetTextureDescriptorSetLayout(),
-				m_TextureObjects, m_GraphicsQueue, m_CommandHandler.GetCommandPool(), texture_names[i]);
+			mat_to_tex[i] = TextureLoader::GetInstance()->CreateTexture(texture_names[i]);
 		}
 	}
 
@@ -310,7 +315,6 @@ void VulkanRenderer::CreateMeshModel(const std::string& file)
 
 	MeshModel mesh_Model = MeshModel(model_meshes);
 	m_MeshModelList.push_back(mesh_Model);
-
 }
 
 bool VulkanRenderer::CheckInstanceExtensionSupport(std::vector<const char*>* extensionsToCheck)
@@ -676,6 +680,10 @@ const VulkanRenderData VulkanRenderer::GetRenderData()
 	data.render_pass			= m_RenderPassHandler.GetRenderPass();
 	data.command_pool			= m_CommandHandler.GetCommandPool();
 	data.command_buffers		= m_CommandHandler.GetCommandBuffers();
+
+	data.texture_descriptor_layout = m_DescriptorsHandler.GetTextureDescriptorSetLayout();
+	data.texture_descriptor_pool = m_DescriptorsHandler.GetTexturePool();
+
 
 	return data;
 }

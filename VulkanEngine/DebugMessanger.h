@@ -33,8 +33,8 @@ private:
 		VkInstance &instance,
 		VkDebugUtilsMessengerEXT &debugMessenger,
 		const VkAllocationCallbacks* pAllocator);
+
 private:
-	
 	static DebugMessanger* s_Instance;
 	VkInstance m_VulkanInstance;
 	VkDebugUtilsMessengerEXT m_DebugMessenger;

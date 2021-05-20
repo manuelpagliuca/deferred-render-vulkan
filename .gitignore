@@ -5,6 +5,8 @@
 
 # External Dependencies
 Vendor/
+Models/
+Textures/
 
 # User-specific files
 *.rsuser

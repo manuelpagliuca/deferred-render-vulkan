@@ -4,7 +4,7 @@
 #include "DescriptorsHandler.h"
 #include "CommandHandler.h"
 #include "Mesh.h"
-
+#include "TextureLoader.h"
 #include "MeshModel.h"
 
 class Scene

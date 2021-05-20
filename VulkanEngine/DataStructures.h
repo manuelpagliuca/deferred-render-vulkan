@@ -26,9 +26,12 @@ struct VulkanRenderData {
 	uint32_t			image_count;
 
 	VkDescriptorPool	imgui_descriptor_pool;
+	VkDescriptorPool	texture_descriptor_pool;
+	VkDescriptorSetLayout texture_descriptor_layout;
+
 	VkCommandPool		command_pool;
 	
-std::vector<VkCommandBuffer> command_buffers;
+	std::vector<VkCommandBuffer> command_buffers;
 
 	VkRenderPass		render_pass;
 };
@@ -56,7 +59,7 @@ struct TextureObjects {
 
 	VkSampler					 TextureSampler = {};
 
-	void CreateTextureSampler(MainDevice &mainDevice)
+	void CreateSampler(MainDevice &mainDevice)
 	{
 		VkSamplerCreateInfo samplerCreateInfo = {};
 		samplerCreateInfo.sType						= VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;

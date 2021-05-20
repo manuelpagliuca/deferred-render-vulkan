@@ -24,7 +24,6 @@ layout(location = 1) out vec2 fragTex;
 
 void main() {
 	gl_Position = uboViewProjection.projection * uboViewProjection.view * pushModel.model * vec4(pos, 1.0);
-	
 	fragCol = col;
 	fragTex = tex;
 }

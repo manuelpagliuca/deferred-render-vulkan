@@ -52,6 +52,7 @@ std::vector<std::string> MeshModel::LoadMaterials(const aiScene* scene)
 
 		texture_list[i] = "";
 
+
 		// Controllo l'esistenza di una texture diffusa (colore semplice)
 		if (material->GetTextureCount(aiTextureType_DIFFUSE))
 		{
@@ -65,6 +66,13 @@ std::vector<std::string> MeshModel::LoadMaterials(const aiScene* scene)
 				texture_list[i] = file_name;
 			}
 		}
+
+		// Se non è presente alcuna texture, utilizza miss.png
+		if (texture_list[i].empty())
+		{
+			texture_list[i] = "miss.png";
+		}
+
 	}
 	return texture_list;
 }
@@ -131,6 +139,7 @@ Mesh MeshModel::LoadMesh(VkPhysicalDevice newPhysicalDevice, VkDevice newDevice,
 			indices.push_back(face.mIndices[j]);
 		}
 	}
+
 	MainDevice m = {newPhysicalDevice, newDevice};
 
 	return Mesh(m, transferQueue, transferCommandPool, &vertices, &indices, matToTex[mesh->mMaterialIndex]);

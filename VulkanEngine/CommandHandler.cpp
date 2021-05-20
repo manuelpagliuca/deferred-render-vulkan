@@ -68,7 +68,7 @@ void CommandHandler::RecordCommands(ImDrawData* draw_data, uint32_t currentImage
 
 	// Valori che vengono utilizzati per pulire l'immagine (background color)
 	std::array<VkClearValue, 2> clearValues;
-	clearValues[0].color = { 0.6f, 0.65f, 0.4f, 1.0f };
+	clearValues[0].color = { 0.0f, 0.0f, 0.0f, 1.0f };
 	clearValues[1].depthStencil.depth = 1.0f;
 
 	renderPassBeginInfo.pClearValues = clearValues.data(); // Puntatore ad un array di ClearValues
@@ -117,7 +117,10 @@ void CommandHandler::RecordCommands(ImDrawData* draw_data, uint32_t currentImage
 			// Bind del Index Buffer di una Mesh ad un Command Buffer, con offset 0 ed usando uint_32
 			vkCmdBindIndexBuffer(m_CommandBuffers[currentImage], mesh_model.GetMesh(k)->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
 			
-			std::array<VkDescriptorSet, 2> descriptorSetGroup = { descriptorSets[currentImage], textureObjects.SamplerDescriptorSets[mesh_model.GetMesh(k)->getTexID()] };
+			std::array<VkDescriptorSet, 2> descriptorSetGroup = {
+				descriptorSets[currentImage],
+				textureObjects.SamplerDescriptorSets[mesh_model.GetMesh(k)->getTexID()] 
+			};
 
 			// Binding del Descriptor Set ad un Command Buffer DYNAMIC UBO
 			//uint32_t dynamicOffset = static_cast<uint32_t>(m_modelUniformAlignment) * static_cast<uint32_t>(j);

@@ -50,21 +50,6 @@ public:
 
 	/* SHADERS */
 	static VkShaderModule CreateShaderModule(const VkDevice& device, const std::vector<char>& code);
-
-	/* TEXTURE */
-	static int CreateTextureImage(MainDevice& mainDevice, TextureObjects& textureObjects, VkQueue& graphicsQueue, VkCommandPool& graphicsCommandPool, std::string fileName);
-	static int CreateTexture(
-		MainDevice& main_device, VkDescriptorPool& texture_pool, VkDescriptorSetLayout& texture_layout,
-		TextureObjects& texture_objects, VkQueue& graphics_queue,
-		VkCommandPool& graphics_command_pool,
-		std::string fileName);
-	static stbi_uc* LoadTextureFile(const std::string &fileName, int* width, int* height, VkDeviceSize* imageSize);
-	static void TransitionImageLayout(const VkDevice& device, const VkQueue& queue, const VkCommandPool& command_pool, 
-		const VkImage& image, const VkImageLayout& old_layout,	const VkImageLayout& new_layout);
-	
-	static int CreateTextureDescriptor(const VkDevice& device, const VkImageView &textureImage, const VkDescriptorPool& texturePool,
-		const VkDescriptorSetLayout& textureLayout, TextureObjects& textureObjects);
-
 private:
 	Utility();
 };
