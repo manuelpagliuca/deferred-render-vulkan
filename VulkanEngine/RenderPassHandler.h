@@ -9,7 +9,7 @@ class RenderPassHandler
 {
 public:
 	RenderPassHandler();
-	RenderPassHandler(MainDevice *maindevice, SwapChainHandler* swapChainHandler);
+	RenderPassHandler(MainDevice *maindevice, SwapChain* swapChainHandler);
 	
 	VkRenderPass* GetRenderPassReference() { return &m_RenderPass; }
 	VkRenderPass& GetRenderPass()		   { return m_RenderPass; }
@@ -25,7 +25,7 @@ public:
 
 private:
 	MainDevice				*m_MainDevice;
-	SwapChainHandler		*m_SwapChainHandler;
+	SwapChain		*m_SwapChainHandler;
 	VkRenderPass			m_RenderPass = {};
 	
 

@@ -38,7 +38,7 @@ private:
 	MainDevice	m_MainDevice;
 	VkSurfaceKHR		m_Surface;	
 	GLFWwindow*			m_Window = nullptr;
-	SwapChainHandler	m_SwapChainHandler;
+	SwapChain	m_SwapChainHandler;
 	RenderPassHandler	m_RenderPassHandler;
 	GraphicPipeline		m_GraphicPipeline;
 	CommandHandler		m_CommandHandler;

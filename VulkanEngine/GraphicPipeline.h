@@ -8,7 +8,7 @@ class GraphicPipeline
 {
 public:
 	GraphicPipeline();
-	GraphicPipeline(MainDevice &mainDevice, SwapChainHandler& swapChainHandler, RenderPassHandler* renderPass, VkDescriptorSetLayout& descriptorSetLayout,
+	GraphicPipeline(MainDevice &mainDevice, SwapChain& swapChainHandler, RenderPassHandler* renderPass, VkDescriptorSetLayout& descriptorSetLayout,
 		VkDescriptorSetLayout& textureObjects, VkPushConstantRange& pushCostantRange);
 
 	VkPipeline&		  GetPipeline()   { return m_GraphicsPipeline; }
@@ -40,7 +40,7 @@ public:
 
 private:
 	MainDevice				m_MainDevice;
-	SwapChainHandler		m_SwapChainHandler;
+	SwapChain		m_SwapChainHandler;
 	RenderPassHandler*		m_RenderPassHandler;
 	VkDescriptorSetLayout	m_DescriptorSetLayout;
 	VkDescriptorSetLayout	m_TextureSetLayout;

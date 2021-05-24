@@ -15,11 +15,11 @@ struct SwapChainDetails {
 	std::vector<VkPresentModeKHR> presentationModes;
 };
 
-class SwapChainHandler
+class SwapChain
 {
 public:
-	SwapChainHandler();
-	SwapChainHandler(MainDevice& mainDevice, VkSurfaceKHR& surface, GLFWwindow* glfwWindow, QueueFamilyIndices& queueFamilyIndices);
+	SwapChain();
+	SwapChain(MainDevice& mainDevice, VkSurfaceKHR& surface, GLFWwindow* glfwWindow, QueueFamilyIndices& queueFamilyIndices);
 
 	/* Generic */
 	void CreateSwapChain();

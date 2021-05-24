@@ -124,7 +124,7 @@ void Utility::CopyBufferCmd(const VkBuffer& src_buffer, const VkBuffer& dst_buff
 
 void Utility::CopyImageBuffer(const VkBuffer &src, const VkImage &image, const uint32_t width, const uint32_t height)
 {
-	const VkCommandBuffer transfer_command_buffer = BeginCommandBuffer();
+	VkCommandBuffer transfer_command_buffer = BeginCommandBuffer();
 
 	VkBufferImageCopy image_region = {};
 	image_region.bufferOffset						= 0;

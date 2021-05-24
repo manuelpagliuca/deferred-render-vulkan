@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "SwapChainHandler.h"
 
-SwapChainHandler::SwapChainHandler()
+SwapChain::SwapChain()
 {
 	m_Swapchain				= 0;
 	m_MainDevice			= {};
@@ -11,7 +11,7 @@ SwapChainHandler::SwapChainHandler()
 	m_GLFWwindow			= nullptr;
 }
 	
-SwapChainHandler::SwapChainHandler(MainDevice &mainDevice, VkSurfaceKHR &surface, GLFWwindow * glfwWindow, QueueFamilyIndices &queueFamilyIndices)
+SwapChain::SwapChain(MainDevice &mainDevice, VkSurfaceKHR &surface, GLFWwindow * glfwWindow, QueueFamilyIndices &queueFamilyIndices)
 {
 	m_Swapchain				= 0;
 	m_MainDevice			= mainDevice;
@@ -22,73 +22,73 @@ SwapChainHandler::SwapChainHandler(MainDevice &mainDevice, VkSurfaceKHR &surface
 	m_GLFWwindow			= glfwWindow;
 }
 
-VkSwapchainKHR* SwapChainHandler::GetSwapChainData()
+VkSwapchainKHR* SwapChain::GetSwapChainData()
 {
 	return &m_Swapchain;
 }
 
-VkSwapchainKHR& SwapChainHandler::GetSwapChain()
+VkSwapchainKHR& SwapChain::GetSwapChain()
 {
 	return m_Swapchain;
 }
 
-SwapChainImage* SwapChainHandler::GetImage(uint32_t index)
+SwapChainImage* SwapChain::GetImage(uint32_t index)
 {
 	return &m_SwapChainImages[index];
 }
 
-void SwapChainHandler::PushImage(SwapChainImage swapChainImage)
+void SwapChain::PushImage(SwapChainImage swapChainImage)
 {
 	m_SwapChainImages.push_back(swapChainImage);
 }
 
-VkImageView& SwapChainHandler::GetSwapChainImageView(uint32_t index)
+VkImageView& SwapChain::GetSwapChainImageView(uint32_t index)
 {
 	return m_SwapChainImages[index].imageView;
 }
 
-size_t SwapChainHandler::SwapChainImagesSize() const
+size_t SwapChain::SwapChainImagesSize() const
 {
 	return m_SwapChainImages.size();
 }
 
-VkFramebuffer& SwapChainHandler::GetFrameBuffer(uint32_t index)
+VkFramebuffer& SwapChain::GetFrameBuffer(uint32_t index)
 {
 	return m_SwapChainFrameBuffers[index];
 }
 
-std::vector<VkFramebuffer>& SwapChainHandler::GetFrameBuffers()
+std::vector<VkFramebuffer>& SwapChain::GetFrameBuffers()
 {
 	return m_SwapChainFrameBuffers;
 }
 
-void SwapChainHandler::PushFrameBuffer(VkFramebuffer frameBuffer)
+void SwapChain::PushFrameBuffer(VkFramebuffer frameBuffer)
 {
 	m_SwapChainFrameBuffers.push_back(frameBuffer);
 }
 
-void SwapChainHandler::SetRenderPass(VkRenderPass* renderPass)
+void SwapChain::SetRenderPass(VkRenderPass* renderPass)
 {
 	m_RenderPass = renderPass;
 }
 
-void SwapChainHandler::SetRecreationStatus(bool const status)
+void SwapChain::SetRecreationStatus(bool const status)
 {
 	m_IsRecreating = status;
 }
 
-void SwapChainHandler::ResizeFrameBuffers()
+void SwapChain::ResizeFrameBuffers()
 {
 	m_SwapChainFrameBuffers.resize(m_SwapChainImages.size());
 }
 
-size_t SwapChainHandler::FrameBuffersSize() const
+size_t SwapChain::FrameBuffersSize() const
 {
 	return m_SwapChainFrameBuffers.size();
 }
 
 
-void SwapChainHandler::CleanUpSwapChain()
+void SwapChain::CleanUpSwapChain()
 {
 	DestroyFrameBuffers();
 
@@ -96,45 +96,45 @@ void SwapChainHandler::CleanUpSwapChain()
 	DestroySwapChain();
 }
 
-void SwapChainHandler::DestroyFrameBuffers()
+void SwapChain::DestroyFrameBuffers()
 {
 	for (auto framebuffer : m_SwapChainFrameBuffers)
 		vkDestroyFramebuffer(m_MainDevice.LogicalDevice, framebuffer, nullptr);
 }
 
-void SwapChainHandler::DestroySwapChainImageViews()
+void SwapChain::DestroySwapChainImageViews()
 {
 	for (auto image : m_SwapChainImages)
 		vkDestroyImageView(m_MainDevice.LogicalDevice, image.imageView, nullptr);
 }
 
-void SwapChainHandler::DestroySwapChain()
+void SwapChain::DestroySwapChain()
 {
 	vkDestroySwapchainKHR(m_MainDevice.LogicalDevice, m_Swapchain, nullptr);
 }
 
-uint32_t SwapChainHandler::GetExtentWidth() const
+uint32_t SwapChain::GetExtentWidth() const
 {
 	return m_SwapChainExtent.width;
 }
 
-uint32_t SwapChainHandler::GetExtentHeight() const
+uint32_t SwapChain::GetExtentHeight() const
 {
 	return m_SwapChainExtent.height;
 }
 
-VkExtent2D& SwapChainHandler::GetExtent()
+VkExtent2D& SwapChain::GetExtent()
 {
 	return m_SwapChainExtent;
 }
 
-VkFormat& SwapChainHandler::GetSwapChainImageFormat()
+VkFormat& SwapChain::GetSwapChainImageFormat()
 {
 	return m_SwapChainImageFormat;
 }
 
 
-void SwapChainHandler::CreateSwapChain()
+void SwapChain::CreateSwapChain()
 {
 	SwapChainDetails swapChainDetails = GetSwapChainDetails(m_MainDevice.PhysicalDevice, m_VulkanSurface);
 
@@ -223,14 +223,14 @@ void SwapChainHandler::CreateSwapChain()
 	
 }
 
-void SwapChainHandler::RecreateSwapChain()
+void SwapChain::RecreateSwapChain()
 {
 	vkDeviceWaitIdle(m_MainDevice.LogicalDevice);
 	CleanUpSwapChain();
 	CreateSwapChain();
 }
 
-void SwapChainHandler::CreateFrameBuffers(VkImageView & depthBufferImageView)
+void SwapChain::CreateFrameBuffers(VkImageView & depthBufferImageView)
 {
 	ResizeFrameBuffers();
 
@@ -259,7 +259,7 @@ void SwapChainHandler::CreateFrameBuffers(VkImageView & depthBufferImageView)
 	}
 }
 
-SwapChainDetails SwapChainHandler::GetSwapChainDetails(VkPhysicalDevice &physicalDevice, VkSurfaceKHR &surface)
+SwapChainDetails SwapChain::GetSwapChainDetails(VkPhysicalDevice &physicalDevice, VkSurfaceKHR &surface)
 {
 	SwapChainDetails swapChainDetails;
 
@@ -285,7 +285,7 @@ SwapChainDetails SwapChainHandler::GetSwapChainDetails(VkPhysicalDevice &physica
 	return swapChainDetails;
 }
 
-VkSurfaceFormatKHR SwapChainHandler::ChooseBestSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats)
+VkSurfaceFormatKHR SwapChain::ChooseBestSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats)
 {
 	bool const onlyOneFormat = formats.size() == 1;
 	bool const isUndefined	 = formats[0].format == VK_FORMAT_UNDEFINED;
@@ -307,7 +307,7 @@ VkSurfaceFormatKHR SwapChainHandler::ChooseBestSurfaceFormat(const std::vector<V
 	return formats[0];
 }
 
-VkPresentModeKHR SwapChainHandler::ChooseBestPresentationMode(const std::vector<VkPresentModeKHR>& presentationModes)
+VkPresentModeKHR SwapChain::ChooseBestPresentationMode(const std::vector<VkPresentModeKHR>& presentationModes)
 {
 	for (const auto& presentationMode : presentationModes)
 	{
@@ -320,7 +320,7 @@ VkPresentModeKHR SwapChainHandler::ChooseBestPresentationMode(const std::vector<
 	return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D SwapChainHandler::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& surfaceCapabilities)
+VkExtent2D SwapChain::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& surfaceCapabilities)
 {
 	// Se la corrente Extent presente nella surface ha una
 	// dimensione differente dal limite numerico, allora è contenuta la dimensione corretta della finestra

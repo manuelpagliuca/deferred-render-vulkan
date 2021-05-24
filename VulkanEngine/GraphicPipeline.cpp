@@ -9,7 +9,7 @@ GraphicPipeline::GraphicPipeline()
 	m_RenderPassHandler = new RenderPassHandler();
 }
 
-GraphicPipeline::GraphicPipeline(MainDevice &mainDevice, SwapChainHandler& swapChainHandler, RenderPassHandler * renderPass,
+GraphicPipeline::GraphicPipeline(MainDevice &mainDevice, SwapChain& swapChainHandler, RenderPassHandler * renderPass,
 	VkDescriptorSetLayout& descriptorSetLayout, VkDescriptorSetLayout& textureSetLayout, VkPushConstantRange& pushCostantRange)
 {
 	m_MainDevice			= mainDevice;

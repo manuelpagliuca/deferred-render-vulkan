@@ -7,7 +7,7 @@ RenderPassHandler::RenderPassHandler()
 	m_RenderPass = 0;
 }
 
-RenderPassHandler::RenderPassHandler(MainDevice* maindevice, SwapChainHandler* swapChainHandler)
+RenderPassHandler::RenderPassHandler(MainDevice* maindevice, SwapChain* swapChainHandler)
 {
 	m_MainDevice		= maindevice;
 	m_SwapChainHandler	= swapChainHandler;
