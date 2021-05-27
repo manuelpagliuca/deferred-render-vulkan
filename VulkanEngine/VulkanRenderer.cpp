@@ -15,7 +15,7 @@ VulkanRenderer::VulkanRenderer()
 	m_UBOViewProjection.view			= glm::mat4(1.f);
 	m_MainDevice.MinUniformBufferOffset	= 0;
 	
-	m_RenderPassHandler  = RenderPassHandler(&m_MainDevice, &m_SwapChainHandler);
+	m_RenderPassHandler  = RenderPassHandler(&m_MainDevice, &m_SwapChain);
 	m_DescriptorsHandler = DescriptorsHandler(&m_MainDevice.LogicalDevice);
 }
 
@@ -34,8 +34,8 @@ int VulkanRenderer::Init(void* t_window)
 		Utility::Setup(&m_MainDevice, &m_Surface, &m_CommandHandler.GetCommandPool(), &m_GraphicsQueue);
 		CreateRenderKernel();
 
-		m_SwapChainHandler	= SwapChain(m_MainDevice, m_Surface, m_Window, m_QueueFamilyIndices);
-		m_SwapChainHandler.CreateSwapChain();
+		m_SwapChain	= SwapChain(m_MainDevice, m_Surface, m_Window, m_QueueFamilyIndices);
+		m_SwapChain.CreateSwapChain();
 
 
 		m_RenderPassHandler.CreateRenderPass();
@@ -45,28 +45,42 @@ int VulkanRenderer::Init(void* t_window)
 		m_DescriptorsHandler.CreateSetLayouts();
 		VkDescriptorSetLayout vpDescSet	= m_DescriptorsHandler.GetViewProjectionDescriptorSetLayout();
 		VkDescriptorSetLayout texDesSet	= m_DescriptorsHandler.GetTextureDescriptorSetLayout();
+		VkDescriptorSetLayout inpDesSet = m_DescriptorsHandler.GetInputDescriptorSetLayout();
 
-		m_GraphicPipeline	= GraphicPipeline(m_MainDevice, m_SwapChainHandler, &m_RenderPassHandler, vpDescSet, texDesSet, m_PushCostantRange);
+		m_GraphicPipeline	= GraphicPipeline(
+			m_MainDevice, m_SwapChain, &m_RenderPassHandler, 
+			vpDescSet, texDesSet, inpDesSet, 
+			m_PushCostantRange);
 
-		Utility::CreateDepthBufferImage(m_DepthBufferImage, m_SwapChainHandler.GetExtent());
+		// Color buffer images
+		m_ColorBufferImages.resize(m_SwapChain.SwapChainImagesSize());
+		for (size_t i = 0; i < m_ColorBufferImages.size(); i++)
+		{
+			Utility::CreateColorBufferImage(m_ColorBufferImages[i], m_SwapChain.GetExtent());			 
+		}
 
-		m_SwapChainHandler.SetRenderPass(m_RenderPassHandler.GetRenderPassReference());
+		// Depth Buffer image
+		Utility::CreateDepthBufferImage(m_DepthBufferImage, m_SwapChain.GetExtent());
 
-		m_SwapChainHandler.CreateFrameBuffers(m_DepthBufferImage.ImageView);
+		m_SwapChain.SetRenderPass(m_RenderPassHandler.GetRenderPassReference());
+		m_SwapChain.CreateFrameBuffers(m_DepthBufferImage.ImageView, m_ColorBufferImages);
 
 		m_CommandHandler = CommandHandler(m_MainDevice, &m_GraphicPipeline, m_RenderPassHandler.GetRenderPassReference());
 		m_CommandHandler.CreateCommandPool(m_QueueFamilyIndices);
-		m_CommandHandler.CreateCommandBuffers(m_SwapChainHandler.FrameBuffersSize());
+		m_CommandHandler.CreateCommandBuffers(m_SwapChain.FrameBuffersSize());
 		m_TextureObjects.CreateSampler(m_MainDevice);
 
 		CreateUniformBuffers();
 
-		m_DescriptorsHandler.CreateDescriptorPools(m_SwapChainHandler.SwapChainImagesSize(), m_viewProjectionUBO.size());
-		m_DescriptorsHandler.CreateDescriptorSets(m_viewProjectionUBO, sizeof(UboViewProjection), m_SwapChainHandler.SwapChainImagesSize());
+		m_DescriptorsHandler.CreateDescriptorPools(m_SwapChain.SwapChainImagesSize(), 
+			m_viewProjectionUBO.size());
 
-		CreateSynchronisation();
-		SetViewProjectionData();
+		m_DescriptorsHandler.CreateDescriptorSets(m_viewProjectionUBO, 
+			sizeof(UboViewProjection), m_SwapChain.SwapChainImagesSize(),
+			m_ColorBufferImages, m_DepthBufferImage);
 
+		CreateSynchronizationObjects();
+		SetViewProjectionDataStructure();
 
 		TextureLoader::GetInstance()->Init(GetRenderData(), &m_TextureObjects);
 		m_Scene.PassRenderData(GetRenderData(), &m_DescriptorsHandler);
@@ -76,7 +90,6 @@ int VulkanRenderer::Init(void* t_window)
 		CreateMeshModel("Models/Vivi_Final.obj");
 		CreateMeshModel("Models/Vivi_Final.obj");
 		//CreateMeshModel("Models/t-rex-triceratops-combined-400k.obj");
-
 	}
 	catch (std::runtime_error& e)
 	{
@@ -107,13 +120,16 @@ void VulkanRenderer::Draw(ImDrawData *draw_data)
 	// e mette SIGNALED il relativo semaforo 'm_imageAvailable' per avvisare
 	// che l'immagine è pronta ad essere utilizzata.
 	uint32_t imageIndex;
-	VkResult result = vkAcquireNextImageKHR(m_MainDevice.LogicalDevice, m_SwapChainHandler.GetSwapChain(),
+	VkResult result = vkAcquireNextImageKHR(m_MainDevice.LogicalDevice, m_SwapChain.GetSwapChain(),
 						  std::numeric_limits<uint64_t>::max(),
 					      m_SyncObjects[m_CurrentFrame].ImageAvailable, VK_NULL_HANDLE, &imageIndex);
 
 	
-	m_CommandHandler.RecordCommands(draw_data, imageIndex, m_SwapChainHandler.GetExtent(),
-	m_SwapChainHandler.GetFrameBuffers(), m_MeshList, m_MeshModelList, m_TextureObjects, m_DescriptorsHandler.GetDescriptorSets());
+	m_CommandHandler.RecordCommands(
+		draw_data, imageIndex, m_SwapChain.GetExtent(),
+		m_SwapChain.GetFrameBuffers(), m_MeshList, m_MeshModelList, m_TextureObjects, 
+		m_DescriptorsHandler.GetDescriptorSets(),
+		m_DescriptorsHandler.GetInputDescriptorSets());
 	
 
 	// Copia nell'UniformBuffer della GPU le matrici m_uboViewProjection
@@ -157,7 +173,7 @@ void VulkanRenderer::Draw(ImDrawData *draw_data)
 	presentInfo.waitSemaphoreCount = 1;									// Numero di semafori da aspettare prima di renderizzare
 	presentInfo.pWaitSemaphores	   = &m_SyncObjects[m_CurrentFrame].RenderFinished; // Aspetta che il rendering dell'immagine sia terminato
 	presentInfo.swapchainCount	   = 1;									// Numero di swapchains a cui presentare
-	presentInfo.pSwapchains		   = m_SwapChainHandler.GetSwapChainData();	 					// Swapchain contenente le immagini
+	presentInfo.pSwapchains		   = m_SwapChain.GetSwapChainData();	 					// Swapchain contenente le immagini
 	presentInfo.pImageIndices	   = &imageIndex;						// Indice dell'immagine nella SwapChain da visualizzare (quella nuova pescata dalle immagini disponibili)
 
 	// Prima di effettuare l'operazione di presentazione dell'immagine a schermo si deve assicurare
@@ -192,22 +208,29 @@ void VulkanRenderer::HandleMinimization()
 
 	m_GraphicPipeline.DestroyPipeline();
 
-	m_SwapChainHandler.DestroyFrameBuffers();
-	m_SwapChainHandler.DestroySwapChainImageViews();
-	m_SwapChainHandler.DestroySwapChain();
-	m_SwapChainHandler.SetRecreationStatus(true);
-	m_SwapChainHandler.CreateSwapChain();
-	m_SwapChainHandler.SetRecreationStatus(false);
+	m_SwapChain.DestroyFrameBuffers();
+	m_SwapChain.DestroySwapChainImageViews();
+	m_SwapChain.DestroySwapChain();
+	m_SwapChain.SetRecreationStatus(true);
+	m_SwapChain.CreateSwapChain();
+	m_SwapChain.SetRecreationStatus(false);
 
 	m_RenderPassHandler.CreateRenderPass();
 
 	m_GraphicPipeline.CreateGraphicPipeline();
 
-	Utility::CreateDepthBufferImage(m_DepthBufferImage, m_SwapChainHandler.GetExtent());
+	// Color buffer images
+	m_ColorBufferImages.resize(m_SwapChain.SwapChainImagesSize());
+	for (size_t i = 0; i < m_ColorBufferImages.size(); i++)
+	{
+		Utility::CreateColorBufferImage(m_ColorBufferImages[i], m_SwapChain.GetExtent());
+	}
 
-	m_SwapChainHandler.CreateFrameBuffers(m_DepthBufferImage.ImageView);
+	// Depth Buffer image
+	Utility::CreateDepthBufferImage(m_DepthBufferImage, m_SwapChain.GetExtent());
 
-	m_CommandHandler.CreateCommandBuffers(m_SwapChainHandler.FrameBuffersSize());
+	m_SwapChain.CreateFrameBuffers(m_DepthBufferImage.ImageView, m_ColorBufferImages);
+	m_CommandHandler.CreateCommandBuffers(m_SwapChain.FrameBuffersSize());
 }
 
 void VulkanRenderer::CreateInstance()
@@ -428,7 +451,7 @@ bool VulkanRenderer::CheckDeviceSuitable(VkPhysicalDevice possibleDevice)
 	// Se le estensioni richieste sono supportate (quindi Surface compresa), si procede con la SwapChain
 	if (extensionSupported)
 	{						
-		SwapChainDetails swapChainDetails = m_SwapChainHandler.GetSwapChainDetails(possibleDevice, m_Surface);
+		SwapChainDetails swapChainDetails = m_SwapChain.GetSwapChainDetails(possibleDevice, m_Surface);
 		swapChainValid = !swapChainDetails.presentationModes.empty() && !swapChainDetails.formats.empty();
 	}
 
@@ -503,24 +526,24 @@ void VulkanRenderer::CreateSurface()
 	}
 }
 
-void VulkanRenderer::CreateSynchronisation()
+void VulkanRenderer::CreateSynchronizationObjects()
 {
 	m_SyncObjects.resize(MAX_FRAMES_IN_FLIGHT);
 
-	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
-	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	VkSemaphoreCreateInfo semaphore_info = {};
+	semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-	VkFenceCreateInfo fenceCreateInfo = {};
-	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;	
+	VkFenceCreateInfo fence_info = {};
+	fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;	
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
-		VkResult const imageAvailableSemaphore = vkCreateSemaphore(m_MainDevice.LogicalDevice, &semaphoreCreateInfo, nullptr, &m_SyncObjects[i].ImageAvailable);
-		VkResult const renderFinishedSemaphore = vkCreateSemaphore(m_MainDevice.LogicalDevice, &semaphoreCreateInfo, nullptr, &m_SyncObjects[i].RenderFinished);
-		VkResult const inFlightFence		   = vkCreateFence(m_MainDevice.LogicalDevice, &fenceCreateInfo, nullptr, &m_SyncObjects[i].InFlight);
+		VkResult image_available_sem = vkCreateSemaphore(m_MainDevice.LogicalDevice, &semaphore_info, nullptr, &m_SyncObjects[i].ImageAvailable);
+		VkResult render_finished_sem = vkCreateSemaphore(m_MainDevice.LogicalDevice, &semaphore_info, nullptr, &m_SyncObjects[i].RenderFinished);
+		VkResult in_flight_fence	 = vkCreateFence(m_MainDevice.LogicalDevice, &fence_info, nullptr, &m_SyncObjects[i].InFlight);
 
-		if (imageAvailableSemaphore != VK_SUCCESS || renderFinishedSemaphore != VK_SUCCESS || inFlightFence != VK_SUCCESS)
+		if (image_available_sem != VK_SUCCESS || render_finished_sem != VK_SUCCESS || in_flight_fence != VK_SUCCESS)
 			throw std::runtime_error("Failed to create semaphores and/or Fence!");
 	}
 }
@@ -532,9 +555,9 @@ void VulkanRenderer::CreatePushCostantRange()
 	m_PushCostantRange.size		  = sizeof(Model);
 }
 
-void VulkanRenderer::SetViewProjectionData()
+void VulkanRenderer::SetViewProjectionDataStructure()
 {
-	float const aspectRatio					= static_cast<float>(m_SwapChainHandler.GetExtentWidth()) / static_cast<float>(m_SwapChainHandler.GetExtentHeight());
+	float const aspectRatio					= static_cast<float>(m_SwapChain.GetExtentWidth()) / static_cast<float>(m_SwapChain.GetExtentHeight());
 	m_UBOViewProjection.projection			= glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.f);
 	m_UBOViewProjection.view				= glm::lookAt(glm::vec3(0.f, 0.f, 3.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.0f, 0.f));
 	m_UBOViewProjection.projection[1][1]	= m_UBOViewProjection.projection[1][1] * -1.0f;
@@ -548,14 +571,14 @@ void VulkanRenderer::CreateUniformBuffers()
 	buffer_settings.properties	= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
 	// Un UBO per ogni immagine della Swap Chain
-	m_viewProjectionUBO.resize(m_SwapChainHandler.SwapChainImagesSize());
-	m_viewProjectionUniformBufferMemory.resize(m_SwapChainHandler.SwapChainImagesSize());
+	m_viewProjectionUBO.resize(m_SwapChain.SwapChainImagesSize());
+	m_viewProjectionUniformBufferMemory.resize(m_SwapChain.SwapChainImagesSize());
 	
 	/*
 	m_modelDynamicUBO.resize(m_swapChainImages.size());
 	m_modelDynamicUniformBufferMemory.resize(m_swapChainImages.size());*/
 
-	for (size_t i = 0; i < m_SwapChainHandler.SwapChainImagesSize(); i++)
+	for (size_t i = 0; i < m_SwapChain.SwapChainImagesSize(); i++)
 	{
 		Utility::CreateBuffer(buffer_settings, &m_viewProjectionUBO[i], &m_viewProjectionUniformBufferMemory[i]);
 		/* DYNAMIC UBO
@@ -628,8 +651,15 @@ void VulkanRenderer::Cleanup()
 		vkFreeMemory(m_MainDevice.LogicalDevice, m_TextureObjects.TextureImageMemory[i], nullptr);
 	}
 
-	m_DepthBufferImage.DestroyAndFree(m_MainDevice);
+	m_DescriptorsHandler.DestroyInputDescriptorPool();
+	m_DescriptorsHandler.DestroyInputSetLayout();
+	for (size_t i = 0; i < m_ColorBufferImages.size(); i++)
+	{
+		m_ColorBufferImages[i].DestroyAndFree(m_MainDevice);
+	}
 
+	m_DepthBufferImage.DestroyAndFree(m_MainDevice);
+	
 	m_DescriptorsHandler.DestroyViewProjectionPool();
 	m_DescriptorsHandler.DestroyViewProjectionLayout();
 
@@ -640,7 +670,9 @@ void VulkanRenderer::Cleanup()
 	}
 
 	for (size_t i = 0; i < m_MeshList.size(); i++)
+	{
 		m_MeshList[i].destroyBuffers();
+	}
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
@@ -650,13 +682,13 @@ void VulkanRenderer::Cleanup()
 	}
 
 	m_CommandHandler.DestroyCommandPool();
-	m_SwapChainHandler.DestroyFrameBuffers();
+	m_SwapChain.DestroyFrameBuffers();
 
 	m_GraphicPipeline.DestroyPipeline();
 	m_RenderPassHandler.DestroyRenderPass();
 
-	m_SwapChainHandler.DestroySwapChainImageViews();
-	m_SwapChainHandler.DestroySwapChain();
+	m_SwapChain.DestroySwapChainImageViews();
+	m_SwapChain.DestroySwapChain();
 
 	vkDestroySurfaceKHR(m_VulkanInstance, m_Surface, nullptr);	// Distrugge la Surface (GLFW si utilizza solo per settarla)
 

@@ -89,7 +89,7 @@ struct UboViewProjection {
 	glm::mat4 view;
 };
 
-struct DepthBufferImage {
+struct BufferImage {
 	VkImage			Image		= {};
 	VkFormat		Format		= {};
 	VkDeviceMemory  Memory		= {};

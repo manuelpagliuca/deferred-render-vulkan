@@ -8,15 +8,19 @@ class GraphicPipeline
 {
 public:
 	GraphicPipeline();
-	GraphicPipeline(MainDevice &mainDevice, SwapChain& swapChainHandler, RenderPassHandler* renderPass, VkDescriptorSetLayout& descriptorSetLayout,
-		VkDescriptorSetLayout& textureObjects, VkPushConstantRange& pushCostantRange);
+	GraphicPipeline(MainDevice &mainDevice, SwapChain& swapChainHandler, RenderPassHandler* renderPass, 
+		VkDescriptorSetLayout& descriptorSetLayout, VkDescriptorSetLayout& textureObjects, 
+		VkDescriptorSetLayout& inputSetLayout, VkPushConstantRange& pushCostantRange);
 
-	VkPipeline&		  GetPipeline()   { return m_GraphicsPipeline; }
-	VkPipelineLayout& GetLayout()	  { return m_PipelineLayout; }
+	VkPipeline&		GetPipeline()   { return m_GraphicsPipeline; }
+	VkPipeline&		GetSecondPipeline() { return m_SecondPipeline; }
+
+	VkPipelineLayout& GetLayout()		{ return m_PipelineLayout; }
+	VkPipelineLayout& GetSecondLayout()	{ return m_SecondPipelineLayout; }
 
 	VkShaderModule CreateShaderModules(const char* path);
-	VkPipelineShaderStageCreateInfo CreateVertexShaderStage();
-	VkPipelineShaderStageCreateInfo CreateFragmentShaderStage();
+	VkPipelineShaderStageCreateInfo CreateVertexShaderStage(const char* vert_str);
+	VkPipelineShaderStageCreateInfo CreateFragmentShaderStage(const char* frag_str);
 
 	void SetVertexStageBindingDescription();
 	void SetVertexttributeDescriptions();
@@ -24,7 +28,7 @@ public:
 	void SetScissor();
 
 	void CreateGraphicPipeline();
-	void CreateShaderStages();
+	//void CreateShaderStages();
 	void CreateVertexInputStage();
 	void CreateInputAssemblyStage();
 	void CreateViewportScissorStage();
@@ -40,18 +44,19 @@ public:
 
 private:
 	MainDevice				m_MainDevice;
-	SwapChain		m_SwapChainHandler;
+	SwapChain				m_SwapChainHandler;
 	RenderPassHandler*		m_RenderPassHandler;
 	VkDescriptorSetLayout	m_DescriptorSetLayout;
 	VkDescriptorSetLayout	m_TextureSetLayout;
+	VkDescriptorSetLayout	m_InputSetLayout;
 	VkPushConstantRange		m_PushCostantRange;
 
-	const char* m_VertexShaderSPIRVPath   = "./Shaders/vert.spv";
-	const char* m_FragmentShaderSPIRVPath = "./Shaders/frag.spv";
-
 private:
-	VkPipeline		  m_GraphicsPipeline;
+	VkPipeline		m_GraphicsPipeline;
+	VkPipeline		m_SecondPipeline;
 	VkPipelineLayout  m_PipelineLayout;
+	VkPipelineLayout  m_SecondPipelineLayout;
+
 	
 	VkPipelineShaderStageCreateInfo		   m_ShaderStages[2]	  = {};
 	VkPipelineVertexInputStateCreateInfo   m_VertexInputStage	  = {};

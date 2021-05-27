@@ -15,26 +15,28 @@ public:
 	VkRenderPass& GetRenderPass()		   { return m_RenderPass; }
 
 	void CreateRenderPass();
-	void SetColourAttachment(const VkFormat& imageFormat);
-	void SetDepthAttachment();
+	VkAttachmentDescription SwapchainColourAttachment(const VkFormat& imageFormat);
+	VkAttachmentDescription InputColourAttachment(const VkFormat& imageFormat);
+	VkAttachmentDescription InputDepthAttachment();
 
-	void SetSubpassDescription();
-	void SetSubpassDependencies();
+	//void SetSubpassDescription();
+	std::array<VkSubpassDependency, 3> SetSubpassDependencies();
 	
 	void DestroyRenderPass();
 
 private:
 	MainDevice				*m_MainDevice;
-	SwapChain		*m_SwapChainHandler;
+	SwapChain				*m_SwapChainHandler;
 	VkRenderPass			m_RenderPass = {};
 	
 
-	VkAttachmentDescription m_ColourAttachment = {};
-	VkAttachmentDescription m_DepthAttachment  = {};
+	//VkAttachmentDescription m_ColourAttachment = {};
+	//VkAttachmentDescription m_InputAttachment  = {};
+	//VkAttachmentDescription m_DepthAttachment  = {};
 
-	VkAttachmentReference	m_ColourAttachmentReference = {};
-	VkAttachmentReference	m_DepthAttachmentReference	= {};
+	//VkAttachmentReference	m_ColourAttachmentReference = {};
+	//VkAttachmentReference	m_DepthAttachmentReference	= {};
 
-	VkSubpassDescription	m_SubpassDescription = {};
-	std::array<VkSubpassDependency, 2> m_SubpassDependencies = {};
+	//VkSubpassDescription	m_SubpassDescription = {};
+	//std::array<VkSubpassDependency, 2> m_SubpassDependencies = {};
 };

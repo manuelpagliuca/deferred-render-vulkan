@@ -230,15 +230,16 @@ void SwapChain::RecreateSwapChain()
 	CreateSwapChain();
 }
 
-void SwapChain::CreateFrameBuffers(VkImageView & depthBufferImageView)
+void SwapChain::CreateFrameBuffers(const VkImageView & depth_buffer, const std::vector<BufferImage> &color_buffer)
 {
 	ResizeFrameBuffers();
 
 	for (uint32_t i = 0; i < m_SwapChainFrameBuffers.size(); ++i)
 	{
-		std::array<VkImageView, 2> attachments = {
-			GetSwapChainImageView(i),
-			depthBufferImageView
+		std::array<VkImageView, 3> attachments = {
+			m_SwapChainImages[i].imageView,
+			color_buffer[i].ImageView,
+			depth_buffer
 		};
 
 		VkFramebufferCreateInfo frameBufferCreateInfo = {};

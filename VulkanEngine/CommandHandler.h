@@ -18,8 +18,10 @@ public:
 
 	void CreateCommandPool(QueueFamilyIndices& queueIndices);
 	void CreateCommandBuffers(size_t const numFrameBuffers);
-	void RecordCommands(ImDrawData* draw_data, uint32_t currentImage, VkExtent2D& imageExtent, std::vector<VkFramebuffer>& frameBuffers,
-		std::vector<Mesh>& meshList, std::vector<MeshModel>& modelList, TextureObjects& textureObjects, std::vector<VkDescriptorSet>& descriptorSets);
+	void RecordCommands(
+		ImDrawData* draw_data, uint32_t currentImage, VkExtent2D& imageExtent,
+		std::vector<VkFramebuffer>& frameBuffers, std::vector<Mesh>& meshList, std::vector<MeshModel>& modelList,
+		TextureObjects& textureObjects, std::vector<VkDescriptorSet>& descriptorSets, std::vector<VkDescriptorSet>& inputDescriptorSet);
 
 	void DestroyCommandPool();
 	void FreeCommandBuffers();

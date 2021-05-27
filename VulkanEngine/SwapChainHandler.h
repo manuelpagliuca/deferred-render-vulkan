@@ -24,7 +24,7 @@ public:
 	/* Generic */
 	void CreateSwapChain();
 	void RecreateSwapChain();
-	void CreateFrameBuffers(VkImageView& depthBufferImageView);
+	void CreateFrameBuffers(const VkImageView& depth_buffer, const std::vector<BufferImage>& color_buffer);
 	void CleanUpSwapChain();
 	void DestroyFrameBuffers();
 	void DestroySwapChainImageViews();

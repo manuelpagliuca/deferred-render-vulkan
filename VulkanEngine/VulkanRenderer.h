@@ -35,10 +35,10 @@ public:
 
 private:
 	VkInstance			m_VulkanInstance;
-	MainDevice	m_MainDevice;
+	MainDevice			m_MainDevice;
 	VkSurfaceKHR		m_Surface;	
 	GLFWwindow*			m_Window = nullptr;
-	SwapChain	m_SwapChainHandler;
+	SwapChain			m_SwapChain;
 	RenderPassHandler	m_RenderPassHandler;
 	GraphicPipeline		m_GraphicPipeline;
 	CommandHandler		m_CommandHandler;
@@ -56,31 +56,32 @@ private:
 	VkQueue	m_GraphicsQueue;							
 	VkQueue	m_PresentationQueue;						
 
-	DepthBufferImage m_DepthBufferImage;
+	std::vector<BufferImage> m_ColorBufferImages;
+	BufferImage m_DepthBufferImage;
+	
+	std::vector<VkBuffer>		 m_viewProjectionUBO;
+	std::vector<VkDeviceMemory>  m_viewProjectionUniformBufferMemory;
+	UboViewProjection			 m_UBOViewProjection;
 
-	std::vector<VkBuffer>		 m_viewProjectionUBO;					
-	std::vector<VkDeviceMemory>  m_viewProjectionUniformBufferMemory;	
 	//std::vector<VkBuffer>		 m_modelDynamicUBO;						
 	//std::vector<VkDeviceMemory>  m_modelDynamicUniformBufferMemory;		
 	VkPushConstantRange			 m_PushCostantRange;
 
 	std::vector<SubmissionSyncObjects> m_SyncObjects;
 
-	Scene m_Scene;
-
 private:
+	Scene m_Scene;
 	std::vector<Mesh> m_MeshList;
 	std::vector<MeshModel> m_MeshModelList;
 
-	UboViewProjection m_UBOViewProjection;
-
+private:
 	/* Core Renderer Functions */
 	void CreateRenderKernel();
 	void CreateInstance();													
 	void RetrievePhysicalDevice();	
 	void CreateLogicalDevice();	
 	void CreateSurface();
-	void CreateSynchronisation();
+	void CreateSynchronizationObjects();
 
 
 	void CreateMeshModel(const std::string& file);
@@ -92,7 +93,7 @@ private:
 	void CreatePushCostantRange();
 	void CreateUniformBuffers();
 	void UpdateUniformBuffers(uint32_t imageIndex);
-	void SetViewProjectionData();
+	void SetViewProjectionDataStructure();
 
 	/* Funzioni di controllo */
 	void HandleMinimization();

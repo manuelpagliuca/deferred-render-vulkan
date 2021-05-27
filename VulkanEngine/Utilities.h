@@ -21,8 +21,9 @@ public:
 	/* IMAGES */
 	static VkImage CreateImage(const ImageInfo& image_info, VkDeviceMemory* image_memory);
 	static VkImageView CreateImageView(const VkImage& image, const VkFormat& format, const VkImageAspectFlags& aspect_flags);
-	static void CreateDepthBufferImage(DepthBufferImage& image, const VkExtent2D &img_extent);
-
+	static void CreateDepthBufferImage(BufferImage& image, const VkExtent2D &img_extent);
+	static void CreateColorBufferImage(BufferImage& image, const VkExtent2D& img_extent);
+	
 	/* MEMORY */
 	static uint32_t FindMemoryTypeIndex(uint32_t supportedMemoryTypes, const VkMemoryPropertyFlags& properties);
 	

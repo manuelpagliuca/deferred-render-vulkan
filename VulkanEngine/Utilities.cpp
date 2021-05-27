@@ -272,14 +272,14 @@ VkImageView Utility::CreateImageView(const VkImage& image, const VkFormat& forma
 	return imageView;
 }
 
-void Utility::CreateDepthBufferImage(DepthBufferImage& image, const VkExtent2D &image_extent)
+void Utility::CreateDepthBufferImage(BufferImage& image, const VkExtent2D &image_extent)
 {
 	// Depth value of 32bit expressed in floats + stencil buffer (non lo usiamo ma è utile averlo disponibile)
-// Nel caso in cui lo stencil buffer non sia disponibile andiamo a prendere solo il depth buffer 32 bit.
-// Se non è disponibile neanche quello da 32 bit si prova con quello di 24 (poi non proviamo più).
+	// Nel caso in cui lo stencil buffer non sia disponibile andiamo a prendere solo il depth buffer 32 bit.
+	// Se non è disponibile neanche quello da 32 bit si prova con quello di 24 (poi non proviamo più).
 	const std::vector<VkFormat> formats = { VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D24_UNORM_S8_UINT };
 	const VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
-	const VkFormatFeatureFlagBits format_flags = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	const VkFormatFeatureFlags format_flags = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
 	image.Format = Utility::ChooseSupportedFormat(formats, tiling, format_flags);
 
@@ -288,12 +288,32 @@ void Utility::CreateDepthBufferImage(DepthBufferImage& image, const VkExtent2D &
 	image_info.height		= image_extent.height;
 	image_info.format		= image.Format;
 	image_info.tiling		= tiling;
-	image_info.usage		= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	image_info.usage		= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
 	image_info.properties	= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
 	image.Image = Utility::CreateImage(image_info, &image.Memory);
-
 	image.ImageView = Utility::CreateImageView(image.Image, image.Format, VK_IMAGE_ASPECT_DEPTH_BIT);
+}
+
+void Utility::CreateColorBufferImage(BufferImage& image, const VkExtent2D& image_extent)
+{
+	const std::vector<VkFormat> formats = { VK_FORMAT_R8G8B8A8_UNORM };
+	const VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
+	const VkFormatFeatureFlags format_flags = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	image.Format = Utility::ChooseSupportedFormat(formats, tiling, format_flags);
+
+	ImageInfo image_info = {};
+	image_info.width = image_extent.width;
+	image_info.height = image_extent.height;
+	image_info.format = image.Format;
+	image_info.tiling = tiling;
+	image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+	image_info.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+	image.Image = Utility::CreateImage(image_info, &image.Memory);
+
+	image.ImageView = Utility::CreateImageView(image.Image, image.Format, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
 uint32_t Utility::FindMemoryTypeIndex(uint32_t supportedMemoryTypes, const VkMemoryPropertyFlags &properties)
