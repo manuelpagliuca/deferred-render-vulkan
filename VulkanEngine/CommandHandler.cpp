@@ -130,8 +130,6 @@ void CommandHandler::RecordCommands(ImDrawData* draw_data, uint32_t currentImage
 		}
 	}
 
-	ImGui_ImplVulkan_RenderDrawData(draw_data, m_CommandBuffers[currentImage]);
-
 	// Start second subpass
 	vkCmdNextSubpass(m_CommandBuffers[currentImage], VK_SUBPASS_CONTENTS_INLINE);
 
@@ -165,8 +163,8 @@ void CommandHandler::RecordCommands(ImDrawData* draw_data, uint32_t currentImage
 	*/
 	
 
-
 	vkCmdEndRenderPass(m_CommandBuffers[currentImage]);
+	//ImGui_ImplVulkan_RenderDrawData(draw_data, m_CommandBuffers[currentImage]);
 
 	res = vkEndCommandBuffer(m_CommandBuffers[currentImage]);
 

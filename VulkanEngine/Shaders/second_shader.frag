@@ -7,7 +7,7 @@ layout(location = 0) out vec4 colour;
 
 void main()
 {
-	int xHalf = 1366/2;
+	int xHalf = 1400/2;
 	if(gl_FragCoord.x > xHalf)
 	{
 		float lowerBound = 0.98;

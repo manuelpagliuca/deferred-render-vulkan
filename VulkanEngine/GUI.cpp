@@ -5,7 +5,6 @@ GUI* GUI::s_Instance = nullptr;
 
 void GUI::Init()
 {
-	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;

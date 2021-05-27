@@ -31,14 +31,14 @@ int main(void)
 {
 	GLFWwindow* window = nullptr;
 
-	InitWindow(&window, "Test Vulkan 13/03/2021", 1360, 720); 
+	InitWindow(&window, "Test Vulkan 13/03/2021", 1400, 1050); 
 
 	if (vulkanRenderer->Init(window) == EXIT_FAILURE)
 		return EXIT_FAILURE;
 
-	float angle		= 0.f;
-	float deltaTime = 0.f;
-	float lastTime  = 0.f;
+	float angle		= 0.0f;
+	float deltaTime = 0.0f;
+	float lastTime  = 0.0f;
 	
 	GUI::GetInstance()->SetRenderData(vulkanRenderer->GetRenderData(), window);
 	GUI::GetInstance()->Init();
