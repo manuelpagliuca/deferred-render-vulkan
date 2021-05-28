@@ -10,7 +10,7 @@ CommandHandler::CommandHandler()
 	m_GraphicPipeline		= nullptr;
 }
 
-CommandHandler::CommandHandler(MainDevice& mainDevice, GraphicPipeline *pipeline, VkRenderPass* renderPass)
+CommandHandler::CommandHandler(MainDevice* mainDevice, GraphicPipeline *pipeline, VkRenderPass* renderPass)
 {
 	m_MainDevice			= mainDevice;
 	m_GraphicPipeline		= pipeline;
@@ -26,7 +26,7 @@ void CommandHandler::CreateCommandPool(QueueFamilyIndices &queueIndices)
 	poolInfo.flags				= VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // Il nostro CommandBuffer viene resettato ogni qualvolta si accede alla 'vkBeginCommandBuffer()'
 	poolInfo.queueFamilyIndex	= queueIndices.GraphicsFamily;			 // I comandi dei CommandBuffers funzionano solo per le Graphic Queues
 
-	VkResult res = vkCreateCommandPool(m_MainDevice.LogicalDevice, &poolInfo, nullptr, &m_GraphicsComandPool);
+	VkResult res = vkCreateCommandPool(m_MainDevice->LogicalDevice, &poolInfo, nullptr, &m_GraphicsComandPool);
 
 	if (res != VK_SUCCESS)
 		throw std::runtime_error("Failed to create a Command Pool!");
@@ -44,7 +44,7 @@ void CommandHandler::CreateCommandBuffers(size_t const numFrameBuffers)
 																// VK_COMMAND_BUFFER_LEVEL_SECONDARY : Il CommandBuffer non può essere chiamato direttamente, ma da altri buffers via "vkCmdExecuteCommands".
 	cbAllocInfo.commandBufferCount = static_cast<uint32_t>(m_CommandBuffers.size()); // Numero di CommandBuffers da allocare
 
-	VkResult res = vkAllocateCommandBuffers(m_MainDevice.LogicalDevice, &cbAllocInfo, m_CommandBuffers.data());
+	VkResult res = vkAllocateCommandBuffers(m_MainDevice->LogicalDevice, &cbAllocInfo, m_CommandBuffers.data());
 
 	if (res != VK_SUCCESS)
 		throw std::runtime_error("Failed to allocate Command Buffers!");
@@ -66,7 +66,7 @@ void CommandHandler::RecordCommands(ImDrawData* draw_data, uint32_t currentImage
 
 	// Valori che vengono utilizzati per pulire l'immagine (background color)
 	std::array<VkClearValue, 3> clear_values;
-	clear_values[0].color = { 1.0f, 0.0f, 0.0f, 0.5f };
+	clear_values[0].color = { 0.0f, 0.0f, 0.0f, 0.0f };
 	clear_values[1].color = { 0.0f, 0.0f, 0.1f, 0.8f };
 	clear_values[2].depthStencil.depth = 1.0f;
 
@@ -176,10 +176,10 @@ void CommandHandler::RecordCommands(ImDrawData* draw_data, uint32_t currentImage
 
 void CommandHandler::DestroyCommandPool()
 {
-	vkDestroyCommandPool(m_MainDevice.LogicalDevice, m_GraphicsComandPool, nullptr);
+	vkDestroyCommandPool(m_MainDevice->LogicalDevice, m_GraphicsComandPool, nullptr);
 }
 
 void CommandHandler::FreeCommandBuffers()
 {
-	vkFreeCommandBuffers(m_MainDevice.LogicalDevice, m_GraphicsComandPool, static_cast<uint32_t>(m_CommandBuffers.size()), m_CommandBuffers.data());
+	vkFreeCommandBuffers(m_MainDevice->LogicalDevice, m_GraphicsComandPool, static_cast<uint32_t>(m_CommandBuffers.size()), m_CommandBuffers.data());
 }

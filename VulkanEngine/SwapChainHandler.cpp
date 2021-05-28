@@ -11,7 +11,8 @@ SwapChain::SwapChain()
 	m_GLFWwindow			= nullptr;
 }
 	
-SwapChain::SwapChain(MainDevice &mainDevice, VkSurfaceKHR &surface, GLFWwindow * glfwWindow, QueueFamilyIndices &queueFamilyIndices)
+SwapChain::SwapChain(MainDevice *mainDevice, VkSurfaceKHR *surface,
+	GLFWwindow *glfwWindow, QueueFamilyIndices &queueFamilyIndices)
 {
 	m_Swapchain				= 0;
 	m_MainDevice			= mainDevice;
@@ -99,18 +100,18 @@ void SwapChain::CleanUpSwapChain()
 void SwapChain::DestroyFrameBuffers()
 {
 	for (auto framebuffer : m_SwapChainFrameBuffers)
-		vkDestroyFramebuffer(m_MainDevice.LogicalDevice, framebuffer, nullptr);
+		vkDestroyFramebuffer(m_MainDevice->LogicalDevice, framebuffer, nullptr);
 }
 
 void SwapChain::DestroySwapChainImageViews()
 {
 	for (auto image : m_SwapChainImages)
-		vkDestroyImageView(m_MainDevice.LogicalDevice, image.imageView, nullptr);
+		vkDestroyImageView(m_MainDevice->LogicalDevice, image.imageView, nullptr);
 }
 
 void SwapChain::DestroySwapChain()
 {
-	vkDestroySwapchainKHR(m_MainDevice.LogicalDevice, m_Swapchain, nullptr);
+	vkDestroySwapchainKHR(m_MainDevice->LogicalDevice, m_Swapchain, nullptr);
 }
 
 uint32_t SwapChain::GetExtentWidth() const
@@ -136,7 +137,7 @@ VkFormat& SwapChain::GetSwapChainImageFormat()
 
 void SwapChain::CreateSwapChain()
 {
-	SwapChainDetails swapChainDetails = GetSwapChainDetails(m_MainDevice.PhysicalDevice, m_VulkanSurface);
+	SwapChainDetails swapChainDetails = GetSwapChainDetails(m_MainDevice->PhysicalDevice, *m_VulkanSurface);
 
 	VkExtent2D extent				  = ChooseSwapExtent(swapChainDetails.surfaceCapabilities);
 	VkSurfaceFormatKHR surfaceFormat  = ChooseBestSurfaceFormat(swapChainDetails.formats);
@@ -154,7 +155,7 @@ void SwapChain::CreateSwapChain()
 
 	VkSwapchainCreateInfoKHR swapChainCreateInfo = {};
 	swapChainCreateInfo.sType				= VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	swapChainCreateInfo.surface				= m_VulkanSurface;										  // Surface alla quale viene bindata la SwapChain
+	swapChainCreateInfo.surface				= *m_VulkanSurface;										  // Surface alla quale viene bindata la SwapChain
 	swapChainCreateInfo.imageFormat			= surfaceFormat.format;									  // Formato delle immagini della SwapChain
 	swapChainCreateInfo.imageColorSpace		= surfaceFormat.colorSpace;								  // Spazio colore delle immagini della SwapChain
 	swapChainCreateInfo.presentMode			= presentMode;											  // Presentation Mode della SwapChain
@@ -186,7 +187,7 @@ void SwapChain::CreateSwapChain()
 
 	swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE; 
 
-	VkResult res = vkCreateSwapchainKHR(m_MainDevice.LogicalDevice, &swapChainCreateInfo, nullptr, &m_Swapchain);
+	VkResult res = vkCreateSwapchainKHR(m_MainDevice->LogicalDevice, &swapChainCreateInfo, nullptr, &m_Swapchain);
 
 	if (res != VK_SUCCESS)
 	{
@@ -199,10 +200,10 @@ void SwapChain::CreateSwapChain()
 
 	// Salviamo le Image pre-esistenti all'interno della SwapChain in un vettore
 	uint32_t swapChainImageCount = 0;
-	vkGetSwapchainImagesKHR(m_MainDevice.LogicalDevice, m_Swapchain, &swapChainImageCount, nullptr);
+	vkGetSwapchainImagesKHR(m_MainDevice->LogicalDevice, m_Swapchain, &swapChainImageCount, nullptr);
 
 	std::vector <VkImage> images(swapChainImageCount);
-	vkGetSwapchainImagesKHR(m_MainDevice.LogicalDevice, m_Swapchain, &swapChainImageCount, images.data());
+	vkGetSwapchainImagesKHR(m_MainDevice->LogicalDevice, m_Swapchain, &swapChainImageCount, images.data());
 
 	if (!m_IsRecreating)
 	{
@@ -225,7 +226,7 @@ void SwapChain::CreateSwapChain()
 
 void SwapChain::RecreateSwapChain()
 {
-	vkDeviceWaitIdle(m_MainDevice.LogicalDevice);
+	vkDeviceWaitIdle(m_MainDevice->LogicalDevice);
 	CleanUpSwapChain();
 	CreateSwapChain();
 }
@@ -251,7 +252,7 @@ void SwapChain::CreateFrameBuffers(const VkImageView & depth_buffer, const std::
 		frameBufferCreateInfo.height			= GetExtentHeight();						 
 		frameBufferCreateInfo.layers			= 1;										 
 
-		VkResult result = vkCreateFramebuffer(m_MainDevice.LogicalDevice, &frameBufferCreateInfo, nullptr, &m_SwapChainFrameBuffers[i]);
+		VkResult result = vkCreateFramebuffer(m_MainDevice->LogicalDevice, &frameBufferCreateInfo, nullptr, &m_SwapChainFrameBuffers[i]);
 
 		if (result != VK_SUCCESS)
 		{

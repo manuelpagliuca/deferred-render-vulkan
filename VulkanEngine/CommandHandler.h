@@ -14,7 +14,7 @@ class CommandHandler
 {
 public:
 	CommandHandler();
-	CommandHandler(MainDevice& mainDevice, GraphicPipeline* pipeline, VkRenderPass* renderPass);
+	CommandHandler(MainDevice* main_device, GraphicPipeline* pipeline, VkRenderPass* renderPass);
 
 	void CreateCommandPool(QueueFamilyIndices& queueIndices);
 	void CreateCommandBuffers(size_t const numFrameBuffers);
@@ -31,8 +31,7 @@ public:
 	std::vector<VkCommandBuffer>& GetCommandBuffers()		{ return m_CommandBuffers; }
 
 private:
-	MainDevice		m_MainDevice;
-
+	MainDevice		*m_MainDevice;
 	VkRenderPass	*m_RenderPass;
 	GraphicPipeline *m_GraphicPipeline;
 	

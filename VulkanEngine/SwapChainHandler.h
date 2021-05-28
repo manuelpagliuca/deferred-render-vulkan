@@ -19,7 +19,8 @@ class SwapChain
 {
 public:
 	SwapChain();
-	SwapChain(MainDevice& mainDevice, VkSurfaceKHR& surface, GLFWwindow* glfwWindow, QueueFamilyIndices& queueFamilyIndices);
+	SwapChain(MainDevice *main_device, VkSurfaceKHR *surface, 
+		GLFWwindow* glfwWindow, QueueFamilyIndices& queueFamilyIndices);
 
 	/* Generic */
 	void CreateSwapChain();
@@ -56,12 +57,13 @@ public:
 	
 private:
 	/* References of the renderer */
-	MainDevice			m_MainDevice;
-	VkSurfaceKHR		m_VulkanSurface;
-	GLFWwindow*			m_GLFWwindow;
+	MainDevice			*m_MainDevice;
+	VkSurfaceKHR		*m_VulkanSurface;
+	GLFWwindow			*m_GLFWwindow;
+	VkRenderPass		*m_RenderPass;
+
 	QueueFamilyIndices  m_QueueFamilyIndices;
 
-	VkRenderPass*		m_RenderPass;
 
 	/* Kernel Of the SwapChainHandler*/
 	private:

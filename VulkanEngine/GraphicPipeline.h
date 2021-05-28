@@ -8,9 +8,7 @@ class GraphicPipeline
 {
 public:
 	GraphicPipeline();
-	GraphicPipeline(MainDevice &mainDevice, SwapChain& swapChainHandler, RenderPassHandler* renderPass, 
-		VkDescriptorSetLayout& descriptorSetLayout, VkDescriptorSetLayout& textureObjects, 
-		VkDescriptorSetLayout& inputSetLayout, VkPushConstantRange& pushCostantRange);
+	GraphicPipeline(MainDevice* main_device, SwapChain* swap_chain, RenderPassHandler* render_pass_handler);
 
 	VkPipeline&		GetPipeline()   { return m_GraphicsPipeline; }
 	VkPipeline&		GetSecondPipeline() { return m_SecondPipeline; }
@@ -22,6 +20,9 @@ public:
 	VkPipelineShaderStageCreateInfo CreateVertexShaderStage(const char* vert_str);
 	VkPipelineShaderStageCreateInfo CreateFragmentShaderStage(const char* frag_str);
 
+	void SetDescriptorSet(VkDescriptorSetLayout& descriptorSetLayout, VkDescriptorSetLayout& textureObjects,
+		VkDescriptorSetLayout& inputSetLayout);
+	void SetPushCostantRange(VkPushConstantRange& pushCostantRange);
 	void SetVertexStageBindingDescription();
 	void SetVertexttributeDescriptions();
 	void SetViewport();
@@ -43,9 +44,10 @@ public:
 	void DestroyPipeline();
 
 private:
-	MainDevice				m_MainDevice;
-	SwapChain				m_SwapChainHandler;
-	RenderPassHandler*		m_RenderPassHandler;
+	MainDevice				*m_MainDevice;
+	SwapChain				*m_SwapChain;
+	RenderPassHandler		*m_RenderPassHandler;
+
 	VkDescriptorSetLayout	m_DescriptorSetLayout;
 	VkDescriptorSetLayout	m_TextureSetLayout;
 	VkDescriptorSetLayout	m_InputSetLayout;
@@ -54,10 +56,10 @@ private:
 private:
 	VkPipeline		m_GraphicsPipeline;
 	VkPipeline		m_SecondPipeline;
+
 	VkPipelineLayout  m_PipelineLayout;
 	VkPipelineLayout  m_SecondPipelineLayout;
-
-	
+		
 	VkPipelineShaderStageCreateInfo		   m_ShaderStages[2]	  = {};
 	VkPipelineVertexInputStateCreateInfo   m_VertexInputStage	  = {};
 	VkPipelineInputAssemblyStateCreateInfo m_InputAssemblyStage	  = {};

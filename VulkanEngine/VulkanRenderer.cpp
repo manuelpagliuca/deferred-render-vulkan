@@ -15,8 +15,11 @@ VulkanRenderer::VulkanRenderer()
 	m_UBOViewProjection.view			= glm::mat4(1.f);
 	m_MainDevice.MinUniformBufferOffset	= 0;
 	
-	m_RenderPassHandler  = RenderPassHandler(&m_MainDevice, &m_SwapChain);
-	m_DescriptorsHandler = DescriptorsHandler(&m_MainDevice.LogicalDevice);
+	m_RenderPassHandler		= RenderPassHandler(&m_MainDevice, &m_SwapChain);
+	m_DescriptorsHandler	= DescriptorsHandler(&m_MainDevice.LogicalDevice);
+	m_SwapChain				= SwapChain(&m_MainDevice, &m_Surface, m_Window, m_QueueFamilyIndices);
+	m_GraphicPipeline		= GraphicPipeline(&m_MainDevice, &m_SwapChain, &m_RenderPassHandler);
+	m_CommandHandler		= CommandHandler(&m_MainDevice, &m_GraphicPipeline, m_RenderPassHandler.GetRenderPassReference());
 }
 
 int VulkanRenderer::Init(void* t_window)
@@ -34,9 +37,7 @@ int VulkanRenderer::Init(void* t_window)
 		Utility::Setup(&m_MainDevice, &m_Surface, &m_CommandHandler.GetCommandPool(), &m_GraphicsQueue);
 		CreateRenderKernel();
 
-		m_SwapChain	= SwapChain(m_MainDevice, m_Surface, m_Window, m_QueueFamilyIndices);
 		m_SwapChain.CreateSwapChain();
-
 
 		m_RenderPassHandler.CreateRenderPass();
 		
@@ -47,25 +48,22 @@ int VulkanRenderer::Init(void* t_window)
 		VkDescriptorSetLayout texDesSet	= m_DescriptorsHandler.GetTextureDescriptorSetLayout();
 		VkDescriptorSetLayout inpDesSet = m_DescriptorsHandler.GetInputDescriptorSetLayout();
 
-		m_GraphicPipeline	= GraphicPipeline(
-			m_MainDevice, m_SwapChain, &m_RenderPassHandler, 
-			vpDescSet, texDesSet, inpDesSet, 
-			m_PushCostantRange);
+		m_GraphicPipeline.SetDescriptorSet(vpDescSet, texDesSet, inpDesSet);
+		m_GraphicPipeline.SetPushCostantRange(m_PushCostantRange);
+		m_GraphicPipeline.CreateGraphicPipeline();
 
-		// Color buffer images
+
 		m_ColorBufferImages.resize(m_SwapChain.SwapChainImagesSize());
 		for (size_t i = 0; i < m_ColorBufferImages.size(); i++)
 		{
 			Utility::CreateColorBufferImage(m_ColorBufferImages[i], m_SwapChain.GetExtent());			 
 		}
 
-		// Depth Buffer image
 		Utility::CreateDepthBufferImage(m_DepthBufferImage, m_SwapChain.GetExtent());
 
 		m_SwapChain.SetRenderPass(m_RenderPassHandler.GetRenderPassReference());
 		m_SwapChain.CreateFrameBuffers(m_DepthBufferImage.ImageView, m_ColorBufferImages);
 
-		m_CommandHandler = CommandHandler(m_MainDevice, &m_GraphicPipeline, m_RenderPassHandler.GetRenderPassReference());
 		m_CommandHandler.CreateCommandPool(m_QueueFamilyIndices);
 		m_CommandHandler.CreateCommandBuffers(m_SwapChain.FrameBuffersSize());
 		m_TextureObjects.CreateSampler(m_MainDevice);
@@ -75,8 +73,8 @@ int VulkanRenderer::Init(void* t_window)
 		m_DescriptorsHandler.CreateDescriptorPools(m_SwapChain.SwapChainImagesSize(), 
 			m_viewProjectionUBO.size());
 
-		m_DescriptorsHandler.CreateDescriptorSets(m_viewProjectionUBO, 
-			sizeof(UboViewProjection), m_SwapChain.SwapChainImagesSize(),
+		m_DescriptorsHandler.CreateDescriptorSets(m_viewProjectionUBO, sizeof(UboViewProjection), 
+			m_SwapChain.SwapChainImagesSize(),
 			m_ColorBufferImages, m_DepthBufferImage);
 
 		CreateSynchronizationObjects();
@@ -89,7 +87,6 @@ int VulkanRenderer::Init(void* t_window)
 		CreateMeshModel("Models/Vivi_Final.obj");
 		CreateMeshModel("Models/Vivi_Final.obj");
 		CreateMeshModel("Models/Vivi_Final.obj");
-		//CreateMeshModel("Models/t-rex-triceratops-combined-400k.obj");
 	}
 	catch (std::runtime_error& e)
 	{

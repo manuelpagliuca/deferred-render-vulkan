@@ -9,21 +9,11 @@ GraphicPipeline::GraphicPipeline()
 	m_RenderPassHandler = new RenderPassHandler();
 }
 
-GraphicPipeline::GraphicPipeline(MainDevice &mainDevice, SwapChain& swapChainHandler, RenderPassHandler * renderPass,
-	VkDescriptorSetLayout& descriptorSetLayout, VkDescriptorSetLayout& textureSetLayout, VkDescriptorSetLayout& inputSetLayout, VkPushConstantRange& pushCostantRange)
+GraphicPipeline::GraphicPipeline(MainDevice* main_device, SwapChain* swap_chain, RenderPassHandler* render_pass_handler)
 {
-	m_MainDevice			= mainDevice;
-	m_SwapChainHandler		= swapChainHandler;
-	m_RenderPassHandler		= renderPass;
-	m_DescriptorSetLayout	= descriptorSetLayout;
-	m_TextureSetLayout		= textureSetLayout;
-	m_InputSetLayout = inputSetLayout;
-
-	m_PushCostantRange		= pushCostantRange;
-	m_GraphicsPipeline		= 0;
-	m_PipelineLayout		= 0;
-
-	CreateGraphicPipeline();
+	m_MainDevice = main_device;
+	m_SwapChain = swap_chain;
+	m_RenderPassHandler = render_pass_handler;
 }
 
 void GraphicPipeline::CreatePipelineLayout()
@@ -37,7 +27,7 @@ void GraphicPipeline::CreatePipelineLayout()
 	pipelineLayoutCreateInfo.pushConstantRangeCount = 1;						  
 	pipelineLayoutCreateInfo.pPushConstantRanges	= &m_PushCostantRange;		  
 	
-	VkResult res = vkCreatePipelineLayout(m_MainDevice.LogicalDevice, &pipelineLayoutCreateInfo, nullptr, &m_PipelineLayout);
+	VkResult res = vkCreatePipelineLayout(m_MainDevice->LogicalDevice, &pipelineLayoutCreateInfo, nullptr, &m_PipelineLayout);
 
 	if (res != VK_SUCCESS)
 		throw std::runtime_error("Failed to create Pipeline Layout.");
@@ -97,15 +87,15 @@ void GraphicPipeline::CreateGraphicPipeline()
 	VkViewport viewport = {};
 	viewport.x			= 0.0f;									
 	viewport.y			= 0.0f;									
-	viewport.width		= static_cast<float>(m_SwapChainHandler.GetExtentWidth());	
-	viewport.height		= static_cast<float>(m_SwapChainHandler.GetExtentHeight());	
+	viewport.width		= static_cast<float>(m_SwapChain->GetExtentWidth());	
+	viewport.height		= static_cast<float>(m_SwapChain->GetExtentHeight());	
 	viewport.minDepth	= 0.0f;							
 	viewport.maxDepth	= 1.0f;							
 
 	// Create a scissor info struct
 	VkRect2D scissor = {};
 	scissor.offset = { 0,0 };							
-	scissor.extent = m_SwapChainHandler.GetExtent();
+	scissor.extent = m_SwapChain->GetExtent();
 
 	VkPipelineViewportStateCreateInfo viewportStateCreateInfo = {};
 	viewportStateCreateInfo.sType			= VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -184,7 +174,7 @@ void GraphicPipeline::CreateGraphicPipeline()
 	pipelineLayoutCreateInfo.pPushConstantRanges	= &m_PushCostantRange;
 
 	// Create Pipeline Layout
-	VkResult result = vkCreatePipelineLayout(m_MainDevice.LogicalDevice, &pipelineLayoutCreateInfo, nullptr, &m_PipelineLayout);
+	VkResult result = vkCreatePipelineLayout(m_MainDevice->LogicalDevice, &pipelineLayoutCreateInfo, nullptr, &m_PipelineLayout);
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create Pipeline Layout!");
@@ -223,7 +213,7 @@ void GraphicPipeline::CreateGraphicPipeline()
 	pipelineCreateInfo.basePipelineIndex = -1;				// or index of pipeline being created to derive from (in case creating multiple at once)
 
 	// Create Graphics Pipeline
-	result = vkCreateGraphicsPipelines(m_MainDevice.LogicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &m_GraphicsPipeline);
+	result = vkCreateGraphicsPipelines(m_MainDevice->LogicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &m_GraphicsPipeline);
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Graphics Pipeline!");
@@ -249,7 +239,7 @@ void GraphicPipeline::CreateGraphicPipeline()
 	secondPipelineLayoutCreateInfo.pushConstantRangeCount	= 0;
 	secondPipelineLayoutCreateInfo.pPushConstantRanges		= nullptr;
 
-	result = vkCreatePipelineLayout(m_MainDevice.LogicalDevice, &secondPipelineLayoutCreateInfo, nullptr, &m_SecondPipelineLayout);
+	result = vkCreatePipelineLayout(m_MainDevice->LogicalDevice, &secondPipelineLayoutCreateInfo, nullptr, &m_SecondPipelineLayout);
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Pipeline Layout!");
@@ -259,7 +249,7 @@ void GraphicPipeline::CreateGraphicPipeline()
 	pipelineCreateInfo.layout	= m_SecondPipelineLayout;	// Change pipeline layout for input attachment descriptor sets
 	pipelineCreateInfo.subpass	= 1;						// Use second subpass
 
-	result = vkCreateGraphicsPipelines(m_MainDevice.LogicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &m_SecondPipeline);
+	result = vkCreateGraphicsPipelines(m_MainDevice->LogicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &m_SecondPipeline);
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Graphics Pipeline!");
@@ -276,8 +266,23 @@ VkShaderModule GraphicPipeline::CreateShaderModules(const char* path)
 
 void GraphicPipeline::DestroyShaderModules()
 {
-	vkDestroyShaderModule(m_MainDevice.LogicalDevice, m_FragmentShaderModule, nullptr);
-	vkDestroyShaderModule(m_MainDevice.LogicalDevice, m_VertexShaderModule, nullptr);
+	vkDestroyShaderModule(m_MainDevice->LogicalDevice, m_FragmentShaderModule, nullptr);
+	vkDestroyShaderModule(m_MainDevice->LogicalDevice, m_VertexShaderModule, nullptr);
+}
+
+void GraphicPipeline::SetDescriptorSet(VkDescriptorSetLayout& descriptorSetLayout, VkDescriptorSetLayout& textureObjects, VkDescriptorSetLayout& inputSetLayout)
+{
+	m_DescriptorSetLayout	= descriptorSetLayout;
+	m_TextureSetLayout		= textureObjects;
+	m_InputSetLayout		= inputSetLayout;
+
+	m_GraphicsPipeline		= 0;
+	m_PipelineLayout		= 0;
+}
+
+void GraphicPipeline::SetPushCostantRange(VkPushConstantRange& pushCostantRange)
+{
+	m_PushCostantRange = pushCostantRange;
 }
 
 void GraphicPipeline::SetVertexStageBindingDescription()
@@ -316,8 +321,8 @@ void GraphicPipeline::SetViewport()
 {
 	m_Viewport.x		= 0.f;														// Valore iniziale della viewport-x
 	m_Viewport.y		= 0.f;														// Valore iniziale della viewport-y
-	m_Viewport.width	= static_cast<float>(m_SwapChainHandler.GetExtentWidth());	// Larghezza della viewport
-	m_Viewport.height	= static_cast<float>(m_SwapChainHandler.GetExtentHeight());	// Altezza della viewport
+	m_Viewport.width	= static_cast<float>(m_SwapChain->GetExtentWidth());	// Larghezza della viewport
+	m_Viewport.height	= static_cast<float>(m_SwapChain->GetExtentHeight());	// Altezza della viewport
 	m_Viewport.minDepth = 0.0f;														// Minima profondità del framebuffer
 	m_Viewport.maxDepth = 1.0f;														// Massima profondità del framebuffer
 }
@@ -325,7 +330,7 @@ void GraphicPipeline::SetViewport()
 void GraphicPipeline::SetScissor()
 {
 	m_Scissor.offset = { 0,0 };			  // Offset da cui iniziare a tagliare la regione
-	m_Scissor.extent = m_SwapChainHandler.GetExtent(); // Extent che descrive la regione da tagliare
+	m_Scissor.extent = m_SwapChain->GetExtent(); // Extent che descrive la regione da tagliare
 }
 /*
 void GraphicPipeline::CreateShaderStages()
@@ -469,9 +474,9 @@ VkPipelineShaderStageCreateInfo GraphicPipeline::CreateFragmentShaderStage(const
 
 void GraphicPipeline::DestroyPipeline()
 {
-	vkDestroyPipeline(m_MainDevice.LogicalDevice, m_GraphicsPipeline, nullptr);
-	vkDestroyPipelineLayout(m_MainDevice.LogicalDevice, m_PipelineLayout, nullptr);
+	vkDestroyPipeline(m_MainDevice->LogicalDevice, m_GraphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(m_MainDevice->LogicalDevice, m_PipelineLayout, nullptr);
 
-	vkDestroyPipeline(m_MainDevice.LogicalDevice, m_SecondPipeline, nullptr);
-	vkDestroyPipelineLayout(m_MainDevice.LogicalDevice, m_SecondPipelineLayout, nullptr);
+	vkDestroyPipeline(m_MainDevice->LogicalDevice, m_SecondPipeline, nullptr);
+	vkDestroyPipelineLayout(m_MainDevice->LogicalDevice, m_SecondPipelineLayout, nullptr);
 }
