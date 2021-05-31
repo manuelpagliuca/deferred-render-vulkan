@@ -18,6 +18,8 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include "MeshModel.h"
+#include "Light.h"
+
 
 class VulkanRenderer
 {
@@ -42,7 +44,7 @@ private:
 	RenderPassHandler	m_RenderPassHandler;
 	GraphicPipeline		m_GraphicPipeline;
 	CommandHandler		m_CommandHandler;
-	DescriptorsHandler	m_DescriptorsHandler;
+	Descriptors			m_Descriptors;
 
 	const std::vector<const char*> m_RequestedDeviceExtensions =
 	{
@@ -59,9 +61,13 @@ private:
 	std::vector<BufferImage> m_ColorBufferImages;
 	BufferImage m_DepthBufferImage;
 	
-	std::vector<VkBuffer>		 m_viewProjectionUBO;
-	std::vector<VkDeviceMemory>  m_viewProjectionUniformBufferMemory;
-	UboViewProjection			 m_UBOViewProjection;
+	std::vector<VkBuffer>		 m_ViewProjectionUBO;
+	std::vector<VkDeviceMemory>  m_ViewProjectionUBOMemory;
+	ViewProjectionData			 m_ViewProjectionData;
+
+	std::vector<VkBuffer>		 m_LightUBO;
+	std::vector<VkDeviceMemory>	 m_LightUBOMemory;
+	LightData					 m_LightData;
 
 	//std::vector<VkBuffer>		 m_modelDynamicUBO;						
 	//std::vector<VkDeviceMemory>  m_modelDynamicUniformBufferMemory;		
@@ -76,7 +82,7 @@ private:
 
 private:
 	/* Core Renderer Functions */
-	void CreateRenderKernel();
+	void CreateKernel();
 	void CreateInstance();													
 	void RetrievePhysicalDevice();	
 	void CreateLogicalDevice();	
@@ -90,10 +96,11 @@ private:
 	void LoadGlfwExtensions(std::vector<const char*>& instanceExtensions);
 
 	/* Uniform Data */
-	void CreatePushCostantRange();
+	void SetupPushCostantRange();
 	void CreateUniformBuffers();
-	void UpdateUniformBuffers(uint32_t imageIndex);
-	void SetViewProjectionDataStructure();
+	void UpdateUniformBuffersWithData(uint32_t imageIndex);
+	void SetUniformDataStructures();
+	void SetLightsDataStructures();
 
 	/* Funzioni di controllo */
 	void HandleMinimization();

@@ -6,19 +6,16 @@
 Scene::Scene()
 {
 	m_RenderData = {};
-	m_DescriptorsHandler	= nullptr;
 }
 
-Scene::Scene(const VulkanRenderData &render_data, DescriptorsHandler* descriptor_handler)
+Scene::Scene(const VulkanRenderData &render_data)
 {
 	m_RenderData		 = render_data;
-	m_DescriptorsHandler = descriptor_handler;
 }
 
-void Scene::PassRenderData(const VulkanRenderData& render_data, DescriptorsHandler* descriptor_handler)
+void Scene::PassRenderData(const VulkanRenderData& render_data)
 {
 	m_RenderData = render_data;
-	m_DescriptorsHandler = descriptor_handler;
 }
 
 void Scene::LoadScene(std::vector<Mesh> &meshList, TextureObjects &textureObjects)

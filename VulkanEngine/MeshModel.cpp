@@ -77,7 +77,8 @@ std::vector<std::string> MeshModel::LoadMaterials(const aiScene* scene)
 	return texture_list;
 }
 
-std::vector<Mesh> MeshModel::LoadNode(VkPhysicalDevice newPhysicalDevice, VkDevice newDevice, VkQueue transferQueue, VkCommandPool transferCommandPool, aiNode* node, const aiScene* scene, std::vector<int> matToTex)
+std::vector<Mesh> MeshModel::LoadNode(VkPhysicalDevice newPhysicalDevice, VkDevice newDevice, 
+	VkQueue transferQueue, VkCommandPool transferCommandPool, aiNode* node, const aiScene* scene, std::vector<int> matToTex)
 {
 	std::vector<Mesh> mesh_list;
 

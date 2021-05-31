@@ -11,13 +11,12 @@ class Scene
 {
 public:
 	Scene();
-	Scene(const VulkanRenderData& render_data, DescriptorsHandler* descriptor_handler);
+	Scene(const VulkanRenderData& render_data);
 
-	void PassRenderData(const VulkanRenderData& render_data, DescriptorsHandler* descriptor_handler);
+	void PassRenderData(const VulkanRenderData& render_data);
 
 	void LoadScene(std::vector<Mesh> &mesh_list, TextureObjects& texture_objects);
 
 private:
 	VulkanRenderData	m_RenderData;
-	DescriptorsHandler* m_DescriptorsHandler;
 };

@@ -1,0 +1,75 @@
+Questo si trova all'interno del CommandHandler nella funzione di draw
+
+// Binding del Descriptor Set ad un Command Buffer DYNAMIC UBO
+//uint32_t dynamicOffset = static_cast<uint32_t>(m_modelUniformAlignment) * static_cast<uint32_t>(j);
+
+
+Questa era la vecchia funzione di draw per disegnare mesh model a mano (non modelli .obj)
+
+	/*
+
+	VkBuffer vertexBuffers[] = { meshList[j].getVertexBuffer() }; // Buffer da bindare prima di essere disegnati
+	VkDeviceSize offsets[] = { 0 };
+
+	// Binding del Vertex Buffer di una Mesh ad un Command Buffer
+	vkCmdBindVertexBuffers(m_CommandBuffers[currentImage], 0, 1, vertexBuffers, offsets);
+
+	// Bind del Index Buffer di una Mesh ad un Command Buffer, con offset 0 ed usando uint_32
+	vkCmdBindIndexBuffer(m_CommandBuffers[currentImage], meshList[j].getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+	std::array<VkDescriptorSet, 2> descriptorSetGroup = { descriptorSets[currentImage], textureObjects.SamplerDescriptorSets[meshList[j].getTexID()] };
+
+	// Binding del Descriptor Set ad un Command Buffer DYNAMIC UBO
+	//uint32_t dynamicOffset = static_cast<uint32_t>(m_modelUniformAlignment) * static_cast<uint32_t>(j);
+
+	vkCmdBindDescriptorSets(m_CommandBuffers[currentImage], VK_PIPELINE_BIND_POINT_GRAPHICS,
+		m_GraphicPipeline->GetLayout(), 0, static_cast<uint32_t>(descriptorSetGroup.size()), descriptorSetGroup.data(), 0, nullptr);
+
+	// Invia un Comando di IndexedDraw ad un Command Buffer
+	vkCmdDrawIndexed(m_CommandBuffers[currentImage], meshList[j].getIndexCount(), 1, 0, 0, 0);
+	*/
+	
+	
+Binding utilizzando i Dynaimc UBO poi sostituiti dalle push costants
+// Model Binding Info (DYNAMIC UBO)
+/*
+VkDescriptorSetLayoutBinding modelLayoutBinding = {};
+modelLayoutBinding.binding			   = 1;											// Punto di binding nello Shader
+modelLayoutBinding.descriptorType	   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC; // Tipo di Descriptor Set (Dynamic Uniform Buffer Object)
+modelLayoutBinding.descriptorCount	   = 1;											// Numero di Descriptor Set da bindare
+modelLayoutBinding.stageFlags		   = VK_SHADER_STAGE_VERTEX_BIT;				// Shaders Stage nel quale viene effettuato il binding
+modelLayoutBinding.pImmutableSamplers  = nullptr;									// rendere il sampler immutable specificando il layout, serve per le textures
+*/
+
+Creazione dei descruptorset per dynamic ubo della model
+/*
+// MODEL DESCRIPTOR (DYNAMIC UBO)
+// Model Buffer Binding Info
+VkDescriptorBufferInfo modelBufferInfo = {};
+modelBufferInfo.buffer = m_modelDynamicUBO[i];
+modelBufferInfo.offset = 0;
+modelBufferInfo.range  = m_modelUniformAlignment;
+
+VkWriteDescriptorSet modelSetWrite = {};
+modelSetWrite.sType			  = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+modelSetWrite.dstSet		  = m_descriptorSets[i];
+modelSetWrite.dstBinding	  = 1;										   // Vogliamo aggiornare quello che binda su 0
+modelSetWrite.dstArrayElement = 0;										   // Se avessimo un array questo
+modelSetWrite.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC; // Indice nell'array da aggiornare
+modelSetWrite.descriptorCount = 1;										   // Numero di descriptor da aggiornare
+modelSetWrite.pBufferInfo	  = &modelBufferInfo;						   // Informazioni a riguardo dei dati del buffer da bindare
+*/
+
+Creazione dei dynamic states all'interno della pipeline
+
+	// -- DYNAMIC STATES --
+	// Dynamic states to enable
+	//std::vector<VkDynamicState> dynamicStateEnables;
+	//dynamicStateEnables.push_back(VK_DYNAMIC_STATE_VIEWPORT);	// Dynamic Viewport : Can resize in command buffer with vkCmdSetViewport(commandbuffer, 0, 1, &viewport);
+	//dynamicStateEnables.push_back(VK_DYNAMIC_STATE_SCISSOR);	// Dynamic Scissor	: Can resize in command buffer with vkCmdSetScissor(commandbuffer, 0, 1, &scissor);
+
+	//// Dynamic State creation info
+	//VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo = {};
+	//dynamicStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	//dynamicStateCreateInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
+	//dynamicStateCreateInfo.pDynamicStates = dynamicStateEnables.data();

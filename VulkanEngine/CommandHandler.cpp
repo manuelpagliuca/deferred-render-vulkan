@@ -50,123 +50,85 @@ void CommandHandler::CreateCommandBuffers(size_t const numFrameBuffers)
 		throw std::runtime_error("Failed to allocate Command Buffers!");
 }
 
-void CommandHandler::RecordCommands(ImDrawData* draw_data, uint32_t currentImage, VkExtent2D &imageExtent, std::vector<VkFramebuffer> &frameBuffers,
-	std::vector<Mesh> &meshList, std::vector<MeshModel>& modelList, TextureObjects & textureObjects, std::vector<VkDescriptorSet> &descriptorSets,
+void CommandHandler::RecordCommands(
+	ImDrawData* draw_data, uint32_t current_img, VkExtent2D &imageExtent, 
+	std::vector<VkFramebuffer> &frameBuffers,
+	std::vector<Mesh> &meshList, 
+	std::vector<MeshModel> &modelList, 
+	TextureObjects &tex_objects,
+	std::vector<VkDescriptorSet> &vp_desc_sets, 
+	std::vector<VkDescriptorSet> &light_desc_sets,
 	std::vector<VkDescriptorSet> &inputDescriptorSet)
 {
 	VkCommandBufferBeginInfo buffer_begin_info = {};
 	buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT; // Il buffer può essere re-inviato al momento della resubmit
 
-	VkRenderPassBeginInfo renderpass_begin_info = {};
-	renderpass_begin_info.sType				= VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderpass_begin_info.renderPass		= *m_RenderPass;		 
-	renderpass_begin_info.renderArea.offset	= { 0, 0 };	 
-	renderpass_begin_info.renderArea.extent	= imageExtent;
-
-	// Valori che vengono utilizzati per pulire l'immagine (background color)
 	std::array<VkClearValue, 3> clear_values;
 	clear_values[0].color = { 0.0f, 0.0f, 0.0f, 0.0f };
 	clear_values[1].color = { 0.0f, 0.0f, 0.1f, 0.8f };
 	clear_values[2].depthStencil.depth = 1.0f;
 
-	renderpass_begin_info.pClearValues = clear_values.data(); // Puntatore ad un array di ClearValues
-	renderpass_begin_info.clearValueCount = static_cast<uint32_t>(clear_values.size());		   // Numero di ClearValues
+	VkRenderPassBeginInfo renderpass_begin_info = {};
+	renderpass_begin_info.sType				= VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderpass_begin_info.renderPass		= *m_RenderPass;		 
+	renderpass_begin_info.renderArea.offset	= { 0, 0 };	 
+	renderpass_begin_info.renderArea.extent	= imageExtent;
+	renderpass_begin_info.pClearValues		= clear_values.data(); 
+	renderpass_begin_info.clearValueCount	= static_cast<uint32_t>(clear_values.size());	
+	renderpass_begin_info.framebuffer		= frameBuffers[current_img];
 
-	// Associo un Framebuffer per volta
-	renderpass_begin_info.framebuffer = frameBuffers[currentImage];
-
-	// Inizia a registrare i comandi nel Command Buffer
-	VkResult res = vkBeginCommandBuffer(m_CommandBuffers[currentImage], &buffer_begin_info);
+	VkResult res = vkBeginCommandBuffer(m_CommandBuffers[current_img], &buffer_begin_info);
 
 	if (res != VK_SUCCESS)
 		throw std::runtime_error("Failed to start recording a Command Buffer!");
 
-	// Inizio del RenderPass
-	// VK_SUBPASS_CONTENTS_INLINE indica che tutti i comandi verranno registrati direttamente sul CommandBuffer primario
-	// e che il CommandBuffer secondario non debba essere eseguito all'interno del Subpass
-	vkCmdBeginRenderPass(m_CommandBuffers[currentImage], &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-
-
-	// Binding della Pipeline Grafica ad un Command Buffer.
-	// VK_PIPELINE_BIND_POINT_GRAPHICS, indica il tipo Binding Point della Pipeline (in questo grafico per la grafica).
-	// (È possibile impostare molteplici pipeline e switchare, per esempio una versione DEFERRED o WIREFRAME)
-	vkCmdBindPipeline(m_CommandBuffers[currentImage], VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicPipeline->GetPipeline());
+	vkCmdBeginRenderPass(m_CommandBuffers[current_img], &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBindPipeline(m_CommandBuffers[current_img], VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicPipeline->GetPipeline());
 
 	for (size_t j = 0; j < modelList.size(); ++j)
 	{
 		MeshModel mesh_model = modelList[j];
-		//Model m = mesh_model.GetModel();// meshList[j].getModel();
 		Model m;
 		m.model = mesh_model.GetModel();
 
-		vkCmdPushConstants(m_CommandBuffers[currentImage], m_GraphicPipeline->GetLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Model), &m);
+		vkCmdPushConstants(m_CommandBuffers[current_img], m_GraphicPipeline->GetLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Model), &m);
 
 		for (size_t k = 0; k < mesh_model.GetMeshCount(); k++)
 		{
-
-			VkBuffer vertexBuffers[] = { mesh_model.GetMesh(k)->getVertexBuffer() }; // Buffer da bindare prima di essere disegnati
+			VkBuffer vertexBuffers[] = { mesh_model.GetMesh(k)->getVertexBuffer() };
 			VkDeviceSize offsets[] = { 0 };
 
-			// Binding del Vertex Buffer di una Mesh ad un Command Buffer
-			vkCmdBindVertexBuffers(m_CommandBuffers[currentImage], 0, 1, vertexBuffers, offsets);
+			vkCmdBindVertexBuffers(m_CommandBuffers[current_img], 0, 1, vertexBuffers, offsets);
 
-			// Bind del Index Buffer di una Mesh ad un Command Buffer, con offset 0 ed usando uint_32
-			vkCmdBindIndexBuffer(m_CommandBuffers[currentImage], mesh_model.GetMesh(k)->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+			vkCmdBindIndexBuffer(m_CommandBuffers[current_img], mesh_model.GetMesh(k)->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
 
-			std::array<VkDescriptorSet, 2> descriptorSetGroup = {
-				descriptorSets[currentImage],
-				textureObjects.SamplerDescriptorSets[mesh_model.GetMesh(k)->getTexID()]
+			std::array<VkDescriptorSet, 3> desc_set_group = {
+				vp_desc_sets[current_img],
+				tex_objects.SamplerDescriptorSets[mesh_model.GetMesh(k)->getTexID()],
+				light_desc_sets[current_img]
 			};
 
-			// Binding del Descriptor Set ad un Command Buffer DYNAMIC UBO
-			//uint32_t dynamicOffset = static_cast<uint32_t>(m_modelUniformAlignment) * static_cast<uint32_t>(j);
+			vkCmdBindDescriptorSets(m_CommandBuffers[current_img], VK_PIPELINE_BIND_POINT_GRAPHICS,
+				m_GraphicPipeline->GetLayout(), 0, static_cast<uint32_t>(desc_set_group.size()), desc_set_group.data(), 0, nullptr);
 
-			vkCmdBindDescriptorSets(m_CommandBuffers[currentImage], VK_PIPELINE_BIND_POINT_GRAPHICS,
-				m_GraphicPipeline->GetLayout(), 0, static_cast<uint32_t>(descriptorSetGroup.size()), descriptorSetGroup.data(), 0, nullptr);
-
-			// Invia un Comando di IndexedDraw ad un Command Buffer
-			vkCmdDrawIndexed(m_CommandBuffers[currentImage], mesh_model.GetMesh(k)->getIndexCount(), 1, 0, 0, 0);
+			vkCmdDrawIndexed(m_CommandBuffers[current_img], mesh_model.GetMesh(k)->getIndexCount(), 1, 0, 0, 0);
 		}
 	}
 
-	// Start second subpass
-	vkCmdNextSubpass(m_CommandBuffers[currentImage], VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdNextSubpass(m_CommandBuffers[current_img], VK_SUBPASS_CONTENTS_INLINE);
 
-	vkCmdBindPipeline(m_CommandBuffers[currentImage], VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicPipeline->GetSecondPipeline());
+		vkCmdBindPipeline(m_CommandBuffers[current_img], VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicPipeline->GetSecondPipeline());
 
-	vkCmdBindDescriptorSets(m_CommandBuffers[currentImage], VK_PIPELINE_BIND_POINT_GRAPHICS,
-		m_GraphicPipeline->GetSecondLayout(), 0, 1, &inputDescriptorSet[currentImage], 0, nullptr);
-	vkCmdDraw(m_CommandBuffers[currentImage], 3, 1, 0, 0);
-		
-	/*
-
-	VkBuffer vertexBuffers[] = { meshList[j].getVertexBuffer() }; // Buffer da bindare prima di essere disegnati
-	VkDeviceSize offsets[] = { 0 };
-
-	// Binding del Vertex Buffer di una Mesh ad un Command Buffer
-	vkCmdBindVertexBuffers(m_CommandBuffers[currentImage], 0, 1, vertexBuffers, offsets);
-
-	// Bind del Index Buffer di una Mesh ad un Command Buffer, con offset 0 ed usando uint_32
-	vkCmdBindIndexBuffer(m_CommandBuffers[currentImage], meshList[j].getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
-
-	std::array<VkDescriptorSet, 2> descriptorSetGroup = { descriptorSets[currentImage], textureObjects.SamplerDescriptorSets[meshList[j].getTexID()] };
-
-	// Binding del Descriptor Set ad un Command Buffer DYNAMIC UBO
-	//uint32_t dynamicOffset = static_cast<uint32_t>(m_modelUniformAlignment) * static_cast<uint32_t>(j);
-
-	vkCmdBindDescriptorSets(m_CommandBuffers[currentImage], VK_PIPELINE_BIND_POINT_GRAPHICS,
-		m_GraphicPipeline->GetLayout(), 0, static_cast<uint32_t>(descriptorSetGroup.size()), descriptorSetGroup.data(), 0, nullptr);
-
-	// Invia un Comando di IndexedDraw ad un Command Buffer
-	vkCmdDrawIndexed(m_CommandBuffers[currentImage], meshList[j].getIndexCount(), 1, 0, 0, 0);
-	*/
+		vkCmdBindDescriptorSets(m_CommandBuffers[current_img], VK_PIPELINE_BIND_POINT_GRAPHICS,
+			m_GraphicPipeline->GetSecondLayout(), 0, 1, &inputDescriptorSet[current_img], 0, nullptr);
+		vkCmdDraw(m_CommandBuffers[current_img], 3, 1, 0, 0);
 	
-
-	vkCmdEndRenderPass(m_CommandBuffers[currentImage]);
+	vkCmdEndRenderPass(m_CommandBuffers[current_img]);
+	
 	//ImGui_ImplVulkan_RenderDrawData(draw_data, m_CommandBuffers[currentImage]);
 
-	res = vkEndCommandBuffer(m_CommandBuffers[currentImage]);
+	res = vkEndCommandBuffer(m_CommandBuffers[current_img]);
 
 	if (res != VK_SUCCESS)
 	{

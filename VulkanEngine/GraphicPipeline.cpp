@@ -4,8 +4,8 @@
 GraphicPipeline::GraphicPipeline()
 {
 	m_MainDevice	    = {};
-	m_GraphicsPipeline  = 0;
-	m_PipelineLayout	= 0;
+	m_FirstPipeline  = 0;
+	m_FirstPipelineLayout	= 0;
 	m_RenderPassHandler = new RenderPassHandler();
 }
 
@@ -14,23 +14,6 @@ GraphicPipeline::GraphicPipeline(MainDevice* main_device, SwapChain* swap_chain,
 	m_MainDevice = main_device;
 	m_SwapChain = swap_chain;
 	m_RenderPassHandler = render_pass_handler;
-}
-
-void GraphicPipeline::CreatePipelineLayout()
-{
-	std::array<VkDescriptorSetLayout, 2> descriptoSetLayouts = { m_DescriptorSetLayout , m_TextureSetLayout };
-
-	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
-	pipelineLayoutCreateInfo.sType					= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutCreateInfo.setLayoutCount			= static_cast<uint32_t>(descriptoSetLayouts.size());					  
-	pipelineLayoutCreateInfo.pSetLayouts			= descriptoSetLayouts.data(); 
-	pipelineLayoutCreateInfo.pushConstantRangeCount = 1;						  
-	pipelineLayoutCreateInfo.pPushConstantRanges	= &m_PushCostantRange;		  
-	
-	VkResult res = vkCreatePipelineLayout(m_MainDevice->LogicalDevice, &pipelineLayoutCreateInfo, nullptr, &m_PipelineLayout);
-
-	if (res != VK_SUCCESS)
-		throw std::runtime_error("Failed to create Pipeline Layout.");
 }
 
 void GraphicPipeline::CreateGraphicPipeline()
@@ -82,7 +65,6 @@ void GraphicPipeline::CreateGraphicPipeline()
 	inputAssembly.topology					= VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;		// Primitive type to assemble vertices as
 	inputAssembly.primitiveRestartEnable	= VK_FALSE;					// Allow overriding of "strip" topology to start new primitives
 
-
 	// -- VIEWPORT & SCISSOR (Dimensioni del framebuffer) --
 	VkViewport viewport = {};
 	viewport.x			= 0.0f;									
@@ -104,28 +86,16 @@ void GraphicPipeline::CreateGraphicPipeline()
 	viewportStateCreateInfo.scissorCount	= 1;
 	viewportStateCreateInfo.pScissors		= &scissor;
 
-	// -- DYNAMIC STATES --
-	// Dynamic states to enable
-	//std::vector<VkDynamicState> dynamicStateEnables;
-	//dynamicStateEnables.push_back(VK_DYNAMIC_STATE_VIEWPORT);	// Dynamic Viewport : Can resize in command buffer with vkCmdSetViewport(commandbuffer, 0, 1, &viewport);
-	//dynamicStateEnables.push_back(VK_DYNAMIC_STATE_SCISSOR);	// Dynamic Scissor	: Can resize in command buffer with vkCmdSetScissor(commandbuffer, 0, 1, &scissor);
-
-	//// Dynamic State creation info
-	//VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo = {};
-	//dynamicStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	//dynamicStateCreateInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
-	//dynamicStateCreateInfo.pDynamicStates = dynamicStateEnables.data();
-
 	// -- RASTERIZER --
 	VkPipelineRasterizationStateCreateInfo rasterizerCreateInfo = {};
 	rasterizerCreateInfo.sType						= VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rasterizerCreateInfo.depthClampEnable			= VK_FALSE;					// Change if fragments beyond near/far planes are clipped (default) or clamped to plane
-	rasterizerCreateInfo.rasterizerDiscardEnable	= VK_FALSE;			// Whether to discard data and skip rasterizer. Never creates fragments, only suitable for pipeline without framebuffer output
-	rasterizerCreateInfo.polygonMode				= VK_POLYGON_MODE_FILL;			// How to handle filling points between vertices
+	rasterizerCreateInfo.depthClampEnable			= VK_FALSE;							// Change if fragments beyond near/far planes are clipped (default) or clamped to plane
+	rasterizerCreateInfo.rasterizerDiscardEnable	= VK_FALSE;							// Whether to discard data and skip rasterizer. Never creates fragments, only suitable for pipeline without framebuffer output
+	rasterizerCreateInfo.polygonMode				= VK_POLYGON_MODE_FILL;				// How to handle filling points between vertices
 	rasterizerCreateInfo.lineWidth					= 1.0f;								// How thick lines should be when drawn
-	rasterizerCreateInfo.cullMode					= VK_CULL_MODE_BACK_BIT;				// Which face of a tri to cull
+	rasterizerCreateInfo.cullMode					= VK_CULL_MODE_BACK_BIT;			// Which face of a tri to cull
 	rasterizerCreateInfo.frontFace					= VK_FRONT_FACE_COUNTER_CLOCKWISE;	// Winding to determine which side is front
-	rasterizerCreateInfo.depthBiasEnable			= VK_FALSE;					// Whether to add depth bias to fragments (good for stopping "shadow acne" in shadow mapping)
+	rasterizerCreateInfo.depthBiasEnable			= VK_FALSE;							// Whether to add depth bias to fragments (good for stopping "shadow acne" in shadow mapping)
 
 	// -- MULTISAMPLING --
 	VkPipelineMultisampleStateCreateInfo multisamplingCreateInfo = {};
@@ -147,73 +117,74 @@ void GraphicPipeline::CreateGraphicPipeline()
 	// Blending uses equation: (srcColorBlendFactor * new colour) colorBlendOp (dstColorBlendFactor * old colour)
 	colourState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 	colourState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-	colourState.colorBlendOp = VK_BLEND_OP_ADD;
+	colourState.colorBlendOp		= VK_BLEND_OP_ADD;
 
 	// Summarised: (VK_BLEND_FACTOR_SRC_ALPHA * new colour) + (VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA * old colour)
 	//			   (new colour alpha * new colour) + ((1 - new colour alpha) * old colour)
 
 	colourState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
 	colourState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-	colourState.alphaBlendOp = VK_BLEND_OP_ADD;
+	colourState.alphaBlendOp		= VK_BLEND_OP_ADD;
 	// Summarised: (1 * new alpha) + (0 * old alpha) = new alpha
 
-	VkPipelineColorBlendStateCreateInfo colourBlendingCreateInfo = {};
-	colourBlendingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colourBlendingCreateInfo.logicOpEnable = VK_FALSE;				// Alternative to calculations is to use logical operations
-	colourBlendingCreateInfo.attachmentCount = 1;
-	colourBlendingCreateInfo.pAttachments = &colourState;
+	VkPipelineColorBlendStateCreateInfo colour_blending = {};
+	colour_blending.sType				= VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colour_blending.logicOpEnable		= VK_FALSE;				// Alternative to calculations is to use logical operations
+	colour_blending.attachmentCount		= 1;
+	colour_blending.pAttachments		= &colourState;
 
 	// -- PIPELINE LAYOUT --
-	std::array<VkDescriptorSetLayout, 2> desc_set_layouts = { m_DescriptorSetLayout, m_TextureSetLayout };
+	std::array<VkDescriptorSetLayout, 3> desc_set_layouts =
+	{
+		m_ViewProjectionSetLayout,
+		m_TextureSetLayout, 
+		m_LightSetLayout
+	};
 
-	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
-	pipelineLayoutCreateInfo.sType					= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutCreateInfo.setLayoutCount			= static_cast<uint32_t>(desc_set_layouts.size());
-	pipelineLayoutCreateInfo.pSetLayouts			= desc_set_layouts.data();
-	pipelineLayoutCreateInfo.pushConstantRangeCount = 1;
-	pipelineLayoutCreateInfo.pPushConstantRanges	= &m_PushCostantRange;
+	VkPipelineLayoutCreateInfo fst_pipeline_layout = {};
+	fst_pipeline_layout.sType					= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	fst_pipeline_layout.setLayoutCount			= static_cast<uint32_t>(desc_set_layouts.size());
+	fst_pipeline_layout.pSetLayouts				= desc_set_layouts.data();
+	fst_pipeline_layout.pushConstantRangeCount	= 1;
+	fst_pipeline_layout.pPushConstantRanges		= &m_PushCostantRange;
 
-	// Create Pipeline Layout
-	VkResult result = vkCreatePipelineLayout(m_MainDevice->LogicalDevice, &pipelineLayoutCreateInfo, nullptr, &m_PipelineLayout);
+	VkResult result = vkCreatePipelineLayout(m_MainDevice->LogicalDevice, &fst_pipeline_layout, nullptr, &m_FirstPipelineLayout);
+
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create Pipeline Layout!");
 	}
 
-
 	// -- DEPTH STENCIL TESTING --
-	VkPipelineDepthStencilStateCreateInfo depthStencilCreateInfo = {};
-	depthStencilCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	depthStencilCreateInfo.depthTestEnable = VK_TRUE;				// Enable checking depth to determine fragment write
-	depthStencilCreateInfo.depthWriteEnable = VK_TRUE;				// Enable writing to depth buffer (to replace old values)
-	depthStencilCreateInfo.depthCompareOp = VK_COMPARE_OP_LESS;		// Comparison operation that allows an overwrite (is in front)
-	depthStencilCreateInfo.depthBoundsTestEnable = VK_FALSE;		// Depth Bounds Test: Does the depth value exist between two bounds
-	depthStencilCreateInfo.stencilTestEnable = VK_FALSE;			// Enable Stencil Test
-
+	VkPipelineDepthStencilStateCreateInfo depth_stencil_info = {};
+	depth_stencil_info.sType					= VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depth_stencil_info.depthTestEnable			= VK_TRUE;				// Enable checking depth to determine fragment write
+	depth_stencil_info.depthWriteEnable			= VK_TRUE;				// Enable writing to depth buffer (to replace old values)
+	depth_stencil_info.depthCompareOp			= VK_COMPARE_OP_LESS;	// Comparison operation that allows an overwrite (is in front)
+	depth_stencil_info.depthBoundsTestEnable	= VK_FALSE;				// Depth Bounds Test: Does the depth value exist between two bounds
+	depth_stencil_info.stencilTestEnable		= VK_FALSE;				// Enable Stencil Test
 
 	// -- GRAPHICS PIPELINE CREATION --
-	VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
-	pipelineCreateInfo.sType				= VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineCreateInfo.stageCount			= 2;							// Number of shader stages
-	pipelineCreateInfo.pStages				= m_ShaderStages;				// List of shader stages
-	pipelineCreateInfo.pVertexInputState	= &vertexInputCreateInfo;		// All the fixed function pipeline states
-	pipelineCreateInfo.pInputAssemblyState	= &inputAssembly;
-	pipelineCreateInfo.pViewportState		= &viewportStateCreateInfo;
-	pipelineCreateInfo.pDynamicState		= nullptr;
-	pipelineCreateInfo.pRasterizationState	= &rasterizerCreateInfo;
-	pipelineCreateInfo.pMultisampleState	= &multisamplingCreateInfo;
-	pipelineCreateInfo.pColorBlendState		= &colourBlendingCreateInfo;
-	pipelineCreateInfo.pDepthStencilState	= &depthStencilCreateInfo;
-	pipelineCreateInfo.layout				= m_PipelineLayout;							// Pipeline Layout pipeline should use
-	pipelineCreateInfo.renderPass			= *m_RenderPassHandler->GetRenderPassReference();// Render pass description the pipeline is compatible with
-	pipelineCreateInfo.subpass				= 0;										// Subpass of render pass to use with pipeline
+	VkGraphicsPipelineCreateInfo pipeline_info = {};
+	pipeline_info.sType					= VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipeline_info.stageCount			= 2;							
+	pipeline_info.pStages				= m_ShaderStages;				
+	pipeline_info.pVertexInputState		= &vertexInputCreateInfo;		
+	pipeline_info.pInputAssemblyState	= &inputAssembly;
+	pipeline_info.pViewportState		= &viewportStateCreateInfo;
+	pipeline_info.pDynamicState			= nullptr;
+	pipeline_info.pRasterizationState	= &rasterizerCreateInfo;
+	pipeline_info.pMultisampleState		= &multisamplingCreateInfo;
+	pipeline_info.pColorBlendState		= &colour_blending;
+	pipeline_info.pDepthStencilState	= &depth_stencil_info;
+	pipeline_info.layout				= m_FirstPipelineLayout;									
+	pipeline_info.renderPass			= *m_RenderPassHandler->GetRenderPassReference();
+	pipeline_info.subpass				= 0;											
+	pipeline_info.basePipelineHandle	= VK_NULL_HANDLE;	
+	pipeline_info.basePipelineIndex		= -1;				
 
-	// Pipeline Derivatives : Can create multiple pipelines that derive from one another for optimisation
-	pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;	// Existing pipeline to derive from...
-	pipelineCreateInfo.basePipelineIndex = -1;				// or index of pipeline being created to derive from (in case creating multiple at once)
+	result = vkCreateGraphicsPipelines(m_MainDevice->LogicalDevice, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &m_FirstPipeline);
 
-	// Create Graphics Pipeline
-	result = vkCreateGraphicsPipelines(m_MainDevice->LogicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &m_GraphicsPipeline);
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Graphics Pipeline!");
@@ -221,6 +192,7 @@ void GraphicPipeline::CreateGraphicPipeline()
 
 	DestroyShaderModules();
 
+	// -SECOND PIPELINE-
 	m_ShaderStages[0] = CreateVertexShaderStage("./Shaders/second_vert.spv");
 	m_ShaderStages[1] = CreateFragmentShaderStage("./Shaders/second_frag.spv");
 
@@ -229,27 +201,28 @@ void GraphicPipeline::CreateGraphicPipeline()
 	vertexInputCreateInfo.vertexAttributeDescriptionCount	= 0;
 	vertexInputCreateInfo.pVertexAttributeDescriptions		= nullptr;
 
-	depthStencilCreateInfo.depthWriteEnable					= VK_FALSE;
+	depth_stencil_info.depthWriteEnable						= VK_FALSE;
 
 	// Create new pipeline layout
-	VkPipelineLayoutCreateInfo secondPipelineLayoutCreateInfo = {};
-	secondPipelineLayoutCreateInfo.sType					= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	secondPipelineLayoutCreateInfo.setLayoutCount			= 1;
-	secondPipelineLayoutCreateInfo.pSetLayouts				= &m_InputSetLayout;
-	secondPipelineLayoutCreateInfo.pushConstantRangeCount	= 0;
-	secondPipelineLayoutCreateInfo.pPushConstantRanges		= nullptr;
+	VkPipelineLayoutCreateInfo snd_pipeline_layout = {};
+	snd_pipeline_layout.sType					= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	snd_pipeline_layout.setLayoutCount			= 1;
+	snd_pipeline_layout.pSetLayouts				= &m_InputSetLayout;
+	snd_pipeline_layout.pushConstantRangeCount	= 0;
+	snd_pipeline_layout.pPushConstantRanges		= nullptr;
 
-	result = vkCreatePipelineLayout(m_MainDevice->LogicalDevice, &secondPipelineLayoutCreateInfo, nullptr, &m_SecondPipelineLayout);
+	result = vkCreatePipelineLayout(m_MainDevice->LogicalDevice, &snd_pipeline_layout, nullptr, &m_SecondPipelineLayout);
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Pipeline Layout!");
 	}
 
-	pipelineCreateInfo.pStages	= m_ShaderStages;			// Update second shader stage list
-	pipelineCreateInfo.layout	= m_SecondPipelineLayout;	// Change pipeline layout for input attachment descriptor sets
-	pipelineCreateInfo.subpass	= 1;						// Use second subpass
+	pipeline_info.pStages	= m_ShaderStages;			// Update second shader stage list
+	pipeline_info.layout	= m_SecondPipelineLayout;	
+	pipeline_info.subpass	= 1;						
 
-	result = vkCreateGraphicsPipelines(m_MainDevice->LogicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &m_SecondPipeline);
+	result = vkCreateGraphicsPipelines(m_MainDevice->LogicalDevice, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &m_SecondPipeline);
+
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create a Graphics Pipeline!");
@@ -270,14 +243,20 @@ void GraphicPipeline::DestroyShaderModules()
 	vkDestroyShaderModule(m_MainDevice->LogicalDevice, m_VertexShaderModule, nullptr);
 }
 
-void GraphicPipeline::SetDescriptorSet(VkDescriptorSetLayout& descriptorSetLayout, VkDescriptorSetLayout& textureObjects, VkDescriptorSetLayout& inputSetLayout)
+void GraphicPipeline::SetDescriptorSetLayouts(
+	VkDescriptorSetLayout& descriptorSetLayout, 
+	VkDescriptorSetLayout& textureObjects, 
+	VkDescriptorSetLayout& inputSetLayout,
+	VkDescriptorSetLayout& light_set_layout)
 {
-	m_DescriptorSetLayout	= descriptorSetLayout;
-	m_TextureSetLayout		= textureObjects;
-	m_InputSetLayout		= inputSetLayout;
-
-	m_GraphicsPipeline		= 0;
-	m_PipelineLayout		= 0;
+	m_ViewProjectionSetLayout	= descriptorSetLayout;
+	m_TextureSetLayout			= textureObjects;
+	m_InputSetLayout			= inputSetLayout;
+	m_LightSetLayout			= light_set_layout;
+	m_FirstPipeline				= 0;
+	m_SecondPipeline			= 0;
+	m_FirstPipelineLayout		= 0;
+	m_SecondPipelineLayout		= 0;
 }
 
 void GraphicPipeline::SetPushCostantRange(VkPushConstantRange& pushCostantRange)
@@ -297,7 +276,6 @@ void GraphicPipeline::SetVertexStageBindingDescription()
 void GraphicPipeline::SetVertexttributeDescriptions()
 {
 	// Attribute Descriptions, come interpretare il Vertex Input su un dato binding stream
-
 	// Attribute for the Vertex Position
 	m_VertexStageAttributeDescriptions[0].binding  = 0;						    // Stream di binding al quale si riferisce
 	m_VertexStageAttributeDescriptions[0].location = 0;						    // Locazione del binding nel Vertex Shader
@@ -474,8 +452,8 @@ VkPipelineShaderStageCreateInfo GraphicPipeline::CreateFragmentShaderStage(const
 
 void GraphicPipeline::DestroyPipeline()
 {
-	vkDestroyPipeline(m_MainDevice->LogicalDevice, m_GraphicsPipeline, nullptr);
-	vkDestroyPipelineLayout(m_MainDevice->LogicalDevice, m_PipelineLayout, nullptr);
+	vkDestroyPipeline(m_MainDevice->LogicalDevice, m_FirstPipeline, nullptr);
+	vkDestroyPipelineLayout(m_MainDevice->LogicalDevice, m_FirstPipelineLayout, nullptr);
 
 	vkDestroyPipeline(m_MainDevice->LogicalDevice, m_SecondPipeline, nullptr);
 	vkDestroyPipelineLayout(m_MainDevice->LogicalDevice, m_SecondPipelineLayout, nullptr);

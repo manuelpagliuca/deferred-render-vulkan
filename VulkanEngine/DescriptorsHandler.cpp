@@ -2,7 +2,7 @@
 #include "Utilities.h"
 #include "DescriptorsHandler.h"
 
-DescriptorsHandler::DescriptorsHandler()
+Descriptors::Descriptors()
 {
 	m_ViewProjectionLayout  = {};
 	m_Device				= {};
@@ -14,27 +14,29 @@ DescriptorsHandler::DescriptorsHandler()
 	std::vector<VkDescriptorSet> m_DescriptorSets = {};
 }
 
-DescriptorsHandler::DescriptorsHandler(VkDevice *device)
+Descriptors::Descriptors(VkDevice *device)
 {
 	m_Device = device;
 }
 
-void DescriptorsHandler::CreateDescriptorPools(size_t numOfSwapImgs, size_t UBOsize)
+void Descriptors::CreateDescriptorPools(size_t swapchain_images, size_t vp_ubo_size, size_t light_ubo_size)
 {
-	CreateViewProjectionPool(numOfSwapImgs, UBOsize);
+	CreateViewProjectionPool(swapchain_images, vp_ubo_size);
 	CreateTexturePool();
 	CreateImguiPool();
-	CreateInputPool(numOfSwapImgs);
+	CreateInputAttachmentsPool(swapchain_images);
+	CreateLightPool(swapchain_images, light_ubo_size);
 }
 
-void DescriptorsHandler::CreateSetLayouts()
+void Descriptors::CreateSetLayouts()
 {
-	CreateViewProjectionDescriptorSetLayout();
-	CreateTextureDescriptorSetLayout();
-	CreateInputDescriptorSetLayout();
+	CreateViewProjectionSetLayout();
+	CreateTextureSetLayout();
+	CreateInputSetLayout();
+	CreateLightSetLayout();
 }
 
-void DescriptorsHandler::CreateViewProjectionDescriptorSetLayout()
+void Descriptors::CreateViewProjectionSetLayout()
 {
 	VkDescriptorSetLayoutBinding viewProjectionLayoutBinding = {};
 	viewProjectionLayoutBinding.binding				= 0;									
@@ -42,16 +44,6 @@ void DescriptorsHandler::CreateViewProjectionDescriptorSetLayout()
 	viewProjectionLayoutBinding.descriptorCount		= 1;								
 	viewProjectionLayoutBinding.stageFlags			= VK_SHADER_STAGE_VERTEX_BIT;		
 	viewProjectionLayoutBinding.pImmutableSamplers	= nullptr;						
-
-	// Model Binding Info (DYNAMIC UBO)
-	/*
-	VkDescriptorSetLayoutBinding modelLayoutBinding = {};
-	modelLayoutBinding.binding			   = 1;											// Punto di binding nello Shader
-	modelLayoutBinding.descriptorType	   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC; // Tipo di Descriptor Set (Dynamic Uniform Buffer Object)
-	modelLayoutBinding.descriptorCount	   = 1;											// Numero di Descriptor Set da bindare
-	modelLayoutBinding.stageFlags		   = VK_SHADER_STAGE_VERTEX_BIT;				// Shaders Stage nel quale viene effettuato il binding
-	modelLayoutBinding.pImmutableSamplers  = nullptr;									// rendere il sampler immutable specificando il layout, serve per le textures
-	*/
 
 	std::vector<VkDescriptorSetLayoutBinding> layoutBindings = { viewProjectionLayoutBinding };
 
@@ -63,10 +55,10 @@ void DescriptorsHandler::CreateViewProjectionDescriptorSetLayout()
 	VkResult result = vkCreateDescriptorSetLayout(*m_Device, &layoutCreateInfo, nullptr, &m_ViewProjectionLayout);
 
 	if (result != VK_SUCCESS)
-		throw std::runtime_error("Failed to create a Descriptor Set Layout");
+		throw std::runtime_error("Failed to create the View-Projection Descriptor Set Layout");
 }
 
-void DescriptorsHandler::CreateTextureDescriptorSetLayout()
+void Descriptors::CreateTextureSetLayout()
 {
 	VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
 	samplerLayoutBinding.binding			= 0;
@@ -84,11 +76,11 @@ void DescriptorsHandler::CreateTextureDescriptorSetLayout()
 
 	if (result != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to create a Descriptor Set Layout!");
+		throw std::runtime_error("Failed to create the Texture Descriptor Set Layout!");
 	}
 }
 
-void DescriptorsHandler::CreateInputDescriptorSetLayout()
+void Descriptors::CreateInputSetLayout()
 {
 	VkDescriptorSetLayoutBinding colourInputLayoutBinding = {};
 	colourInputLayoutBinding.binding			= 0;
@@ -114,17 +106,38 @@ void DescriptorsHandler::CreateInputDescriptorSetLayout()
 
 	if (result != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to create a Input Descriptor Set Layout!");
+		throw std::runtime_error("Failed to create the Input Descriptor Set Layout!");
 	}
 }
 
-void DescriptorsHandler::CreateDescriptorSets(const std::vector<VkBuffer> & viewProjectionUBO,
-	size_t dataSize, size_t swapchain_size,
-	const std::vector<BufferImage> &color_buffer, const BufferImage &depth_buffer)
+void Descriptors::CreateLightSetLayout()
+{
+	VkDescriptorSetLayoutBinding light_layout_binding = {};
+	light_layout_binding.binding			= 0;
+	light_layout_binding.descriptorType		= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	light_layout_binding.descriptorCount	= 1;
+	light_layout_binding.stageFlags			= VK_SHADER_STAGE_FRAGMENT_BIT;			
+	light_layout_binding.pImmutableSamplers = nullptr;
+
+	std::vector<VkDescriptorSetLayoutBinding> layout_bindings = { light_layout_binding };
+
+	VkDescriptorSetLayoutCreateInfo layout_info = {};
+	layout_info.sType			= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layout_info.bindingCount	= static_cast<uint32_t>(layout_bindings.size());
+	layout_info.pBindings		= layout_bindings.data();
+
+	VkResult result = vkCreateDescriptorSetLayout(*m_Device, &layout_info, nullptr, &m_LightLayout);
+
+	if (result != VK_SUCCESS)
+		throw std::runtime_error("Failed to create the Light Descriptor Set Layout");
+}
+
+void Descriptors::CreateViewProjectionDescriptorSets(
+	const std::vector<VkBuffer> & viewProjectionUBO,
+	size_t dataSize, size_t swapchain_size)
 {
 	m_DescriptorSets.resize(swapchain_size);
 
-	// Lista di tutti i possibili layour che useremo dal set (?) non capito TODO
 	std::vector<VkDescriptorSetLayout> setLayouts(swapchain_size, m_ViewProjectionLayout);
 
 	VkDescriptorSetAllocateInfo allocate_info = {};
@@ -143,8 +156,8 @@ void DescriptorsHandler::CreateDescriptorSets(const std::vector<VkBuffer> & view
 	for (size_t i = 0; i < swapchain_size; ++i)
 	{
 		VkDescriptorBufferInfo vpBufferInfo = {};
-		vpBufferInfo.buffer = viewProjectionUBO[i];		// Buffer da cui prendere i dati
-		vpBufferInfo.offset = 0;						// Offset da cui partire
+		vpBufferInfo.buffer = viewProjectionUBO[i];		
+		vpBufferInfo.offset = 0;						
 		vpBufferInfo.range	= dataSize;
 
 		VkWriteDescriptorSet vpSetWrite = {};
@@ -155,60 +168,38 @@ void DescriptorsHandler::CreateDescriptorSets(const std::vector<VkBuffer> & view
 		vpSetWrite.descriptorType	= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;	// Indice nell'array da aggiornare
 		vpSetWrite.descriptorCount	= 1;									// Numero di descriptor da aggiornare
 		vpSetWrite.pBufferInfo		= &vpBufferInfo;						// Informazioni a riguardo dei dati del buffer da bindare
-/*
-		// MODEL DESCRIPTOR (DYNAMIC UBO)
-		// Model Buffer Binding Info
-		VkDescriptorBufferInfo modelBufferInfo = {};
-		modelBufferInfo.buffer = m_modelDynamicUBO[i];
-		modelBufferInfo.offset = 0;
-		modelBufferInfo.range  = m_modelUniformAlignment;
 
-		VkWriteDescriptorSet modelSetWrite = {};
-		modelSetWrite.sType			  = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		modelSetWrite.dstSet		  = m_descriptorSets[i];
-		modelSetWrite.dstBinding	  = 1;										   // Vogliamo aggiornare quello che binda su 0
-		modelSetWrite.dstArrayElement = 0;										   // Se avessimo un array questo
-		modelSetWrite.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC; // Indice nell'array da aggiornare
-		modelSetWrite.descriptorCount = 1;										   // Numero di descriptor da aggiornare
-		modelSetWrite.pBufferInfo	  = &modelBufferInfo;						   // Informazioni a riguardo dei dati del buffer da bindare
-		*/
 		std::vector<VkWriteDescriptorSet> setWrites = { vpSetWrite };
 
 		vkUpdateDescriptorSets(*m_Device, static_cast<uint32_t>(setWrites.size()), setWrites.data(), 0, nullptr);
 	}
+}
 
-	// INPUT DESCRIPTOR SET CRATION (REFACTORING)
-
-	// Resize array to hold descriptor set for each swap chain image
+void Descriptors::CreateInputAttachmentsDescriptorSets(size_t swapchain_size, const std::vector<BufferImage>& color_buffer, const BufferImage& depth_buffer)
+{
 	m_InputDescriptorSets.resize(swapchain_size);
 
-	// Fill array of layouts ready for set creation
 	std::vector<VkDescriptorSetLayout> inputSetLayouts(swapchain_size, m_InputLayout);
 
-	// Input Attachment Descriptor Set Allocation Info
 	VkDescriptorSetAllocateInfo input_allocate_info = {};
 	input_allocate_info.sType				= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	input_allocate_info.descriptorPool		= m_InputPool;
 	input_allocate_info.descriptorSetCount	= static_cast<uint32_t>(swapchain_size);
 	input_allocate_info.pSetLayouts			= inputSetLayouts.data();
 
-	// Allocate Descriptor Sets
 	VkResult result = vkAllocateDescriptorSets(*m_Device, &input_allocate_info, m_InputDescriptorSets.data());
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to allocate Input Attachment Descriptor Sets!");
 	}
 
-	// Update each descriptor set with input attachment
 	for (size_t i = 0; i < swapchain_size; i++)
 	{
-		// Colour Attachment Descriptor
 		VkDescriptorImageInfo colourAttachmentDescriptor = {};
 		colourAttachmentDescriptor.imageLayout	= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		colourAttachmentDescriptor.imageView	= color_buffer[i].ImageView;
 		colourAttachmentDescriptor.sampler		= VK_NULL_HANDLE;
 
-		// Colour Attachment Descriptor Write
 		VkWriteDescriptorSet colourWrite = {};
 		colourWrite.sType			= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		colourWrite.dstSet			= m_InputDescriptorSets[i];
@@ -218,13 +209,11 @@ void DescriptorsHandler::CreateDescriptorSets(const std::vector<VkBuffer> & view
 		colourWrite.descriptorCount = 1;
 		colourWrite.pImageInfo		= &colourAttachmentDescriptor;
 
-		// Depth Attachment Descriptor
 		VkDescriptorImageInfo depthAttachmentDescriptor = {};
 		depthAttachmentDescriptor.imageLayout	= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		depthAttachmentDescriptor.imageView		= depth_buffer.ImageView;
 		depthAttachmentDescriptor.sampler		= VK_NULL_HANDLE;
 
-		// Depth Attachment Descriptor Write
 		VkWriteDescriptorSet depthWrite = {};
 		depthWrite.sType			= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		depthWrite.dstSet			= m_InputDescriptorSets[i];
@@ -234,85 +223,144 @@ void DescriptorsHandler::CreateDescriptorSets(const std::vector<VkBuffer> & view
 		depthWrite.descriptorCount	= 1;
 		depthWrite.pImageInfo		= &depthAttachmentDescriptor;
 
-		// List of input descriptor set writes
 		std::vector<VkWriteDescriptorSet> setWrites = { colourWrite, depthWrite };
 
-		// Update descriptor sets
 		vkUpdateDescriptorSets(*m_Device, static_cast<uint32_t>(setWrites.size()), setWrites.data(), 0, nullptr);
 	}
 }
 
-VkDescriptorSetLayout& DescriptorsHandler::GetViewProjectionDescriptorSetLayout()
+void Descriptors::CreateLightDescriptorSets(const std::vector<VkBuffer>& ubo_light, size_t data_size, size_t swapchain_images)
+{
+	m_LightDescriptorSets.resize(swapchain_images);
+
+	std::vector<VkDescriptorSetLayout> desc_set_layouts(swapchain_images, m_LightLayout);
+
+	VkDescriptorSetAllocateInfo light_allocate_info = {};
+	light_allocate_info.sType				= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	light_allocate_info.descriptorPool		= m_LightPool;
+	light_allocate_info.descriptorSetCount	= static_cast<uint32_t>(swapchain_images);
+	light_allocate_info.pSetLayouts			= desc_set_layouts.data();
+
+	VkResult result = vkAllocateDescriptorSets(*m_Device, &light_allocate_info, m_LightDescriptorSets.data());
+
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to allocate Light Attachment Descriptor Sets!");
+	}
+
+	for (size_t i = 0; i < swapchain_images; i++)
+	{
+		VkDescriptorBufferInfo light_buffer_info = {};
+		light_buffer_info.buffer = ubo_light[i];		
+		light_buffer_info.offset = 0;				
+		light_buffer_info.range	 = data_size;
+
+		VkWriteDescriptorSet light_set_write = {};
+		light_set_write.sType			= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		light_set_write.dstSet			= m_LightDescriptorSets[i];
+		light_set_write.dstBinding		= 0;									
+		light_set_write.dstArrayElement	= 0;									
+		light_set_write.descriptorType	= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;	
+		light_set_write.descriptorCount	= 1;									
+		light_set_write.pBufferInfo		= &light_buffer_info;					
+
+		std::vector<VkWriteDescriptorSet> set_writes = { light_set_write };
+
+		vkUpdateDescriptorSets(*m_Device, static_cast<uint32_t>(set_writes.size()), set_writes.data(), 0, nullptr);
+	}
+}
+
+VkDescriptorSetLayout& Descriptors::GetViewProjectionSetLayout()
 {
 	return m_ViewProjectionLayout;
 }
 
-VkDescriptorSetLayout& DescriptorsHandler::GetTextureDescriptorSetLayout()
+VkDescriptorSetLayout& Descriptors::GetTextureSetLayout()
 {
 	return m_TextureLayout;
 }
 
-VkDescriptorSetLayout& DescriptorsHandler::GetInputDescriptorSetLayout()
+VkDescriptorSetLayout& Descriptors::GetInputSetLayout()
 {
 	return m_InputLayout;
 }
 
-VkDescriptorPool& DescriptorsHandler::GetVpPool()
+VkDescriptorSetLayout& Descriptors::GetLightSetLayout()
+{
+	return m_LightLayout;
+}
+
+VkDescriptorPool& Descriptors::GetVpPool()
 {
 	return m_ViewProjectionPool;
 }
 
-VkDescriptorPool& DescriptorsHandler::GetImguiDescriptorPool()
+VkDescriptorPool& Descriptors::GetImguiDescriptorPool()
 {
 	return m_ImguiDescriptorPool;
 }
 
-VkDescriptorPool& DescriptorsHandler::GetTexturePool()
+VkDescriptorPool& Descriptors::GetTexturePool()
 {
 	return m_TexturePool;
 }
 
-VkDescriptorPool& DescriptorsHandler::GetInputPool()
+VkDescriptorPool& Descriptors::GetInputPool()
 {
 	return m_InputPool;
 }
 
-std::vector<VkDescriptorSet>& DescriptorsHandler::GetDescriptorSets()
+VkDescriptorPool& Descriptors::GetLightPool()
+{
+	return m_LightPool;
+}
+
+std::vector<VkDescriptorSet>& Descriptors::GetDescriptorSets()
 {
 	return m_DescriptorSets;
 }
 
-std::vector<VkDescriptorSet>& DescriptorsHandler::GetInputDescriptorSets()
+std::vector<VkDescriptorSet>& Descriptors::GetInputDescriptorSets()
 {
 	return m_InputDescriptorSets;
 }
 
-void DescriptorsHandler::DestroyTexturePool()
+std::vector<VkDescriptorSet>& Descriptors::GetLightDescriptorSets()
+{
+	return m_LightDescriptorSets;
+}
+
+void Descriptors::DestroyTexturePool()
 {
 	vkDestroyDescriptorPool(*m_Device, m_TexturePool, nullptr);
 }
 
-void DescriptorsHandler::DestroyTextureLayout()
+void Descriptors::DestroyTextureLayout()
 {
 	vkDestroyDescriptorSetLayout(*m_Device, m_TextureLayout, nullptr);
 }
 
-void DescriptorsHandler::DestroyViewProjectionPool()
+void Descriptors::DestroyViewProjectionPool()
 {
 	vkDestroyDescriptorPool(*m_Device, m_ViewProjectionPool, nullptr);
 }
 
-void DescriptorsHandler::DestroyViewProjectionLayout()
+void Descriptors::DestroyViewProjectionLayout()
 {
 	vkDestroyDescriptorSetLayout(*m_Device, m_ViewProjectionLayout, nullptr);
 }
 
-void DescriptorsHandler::DestroyInputSetLayout()
+void Descriptors::DestroyInputAttachmentsLayout()
 {
 	vkDestroyDescriptorSetLayout(*m_Device, m_InputLayout, nullptr);
 }
 
-void DescriptorsHandler::CreateViewProjectionPool(size_t numOfSwapImgs, size_t UBOsize)
+void Descriptors::DestroyLightLayout()
+{
+	vkDestroyDescriptorSetLayout(*m_Device, m_LightLayout, nullptr);
+}
+
+void Descriptors::CreateViewProjectionPool(size_t numOfSwapImgs, size_t UBOsize)
 {
 	VkDescriptorPoolSize vpPoolSize = {};
 	vpPoolSize.type				= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;			   // Che tipo di descriptor contiene (non è un descriptor set ma sono quelli presenti negli shaders)
@@ -339,7 +387,7 @@ void DescriptorsHandler::CreateViewProjectionPool(size_t numOfSwapImgs, size_t U
 	}
 }
 
-void DescriptorsHandler::CreateTexturePool()
+void Descriptors::CreateTexturePool()
 {
 	VkDescriptorPoolSize samplerPoolSize = {};
 	samplerPoolSize.type			= VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -359,7 +407,7 @@ void DescriptorsHandler::CreateTexturePool()
 	}
 }
 
-void DescriptorsHandler::CreateImguiPool()
+void Descriptors::CreateImguiPool()
 {
 	VkDescriptorPoolSize imguiPoolSize[] =
 	{
@@ -391,7 +439,7 @@ void DescriptorsHandler::CreateImguiPool()
 	}
 }
 
-void DescriptorsHandler::CreateInputPool(size_t numOfSwapImgs)
+void Descriptors::CreateInputAttachmentsPool(size_t numOfSwapImgs)
 {
 	VkDescriptorPoolSize color_pool_size = {};
 	color_pool_size.type			= VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
@@ -416,12 +464,40 @@ void DescriptorsHandler::CreateInputPool(size_t numOfSwapImgs)
 	}
 }
 
-void DescriptorsHandler::DestroyImguiDescriptorPool()
+void Descriptors::CreateLightPool(size_t swapchain_images, size_t ubo_size)
+{
+	VkDescriptorPoolSize light_pool_size = {};
+	light_pool_size.type			= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;	
+	light_pool_size.descriptorCount = static_cast<uint32_t> (ubo_size); 
+
+	std::vector<VkDescriptorPoolSize> pool_sizes = { light_pool_size };
+
+	VkDescriptorPoolCreateInfo pool_info = {};
+	pool_info.sType			= VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	pool_info.maxSets		= static_cast<uint32_t>(swapchain_images);
+	pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());											  
+	pool_info.pPoolSizes	= pool_sizes.data();		
+
+	VkResult result = vkCreateDescriptorPool(*m_Device, &pool_info, nullptr, &m_LightPool);
+
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create the Light Descriptor Pool!");
+	}
+
+}
+
+void Descriptors::DestroyImguiPool()
 {
 	vkDestroyDescriptorPool(*m_Device, m_ImguiDescriptorPool, nullptr);
 }
 
-void DescriptorsHandler::DestroyInputDescriptorPool()
+void Descriptors::DestroyInputPool()
 {
 	vkDestroyDescriptorPool(*m_Device, m_InputPool, nullptr);
+}
+
+void Descriptors::DestroyLightPool()
+{
+	vkDestroyDescriptorPool(*m_Device, m_LightPool, nullptr);
 }

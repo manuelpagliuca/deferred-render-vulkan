@@ -10,18 +10,19 @@ public:
 	GraphicPipeline();
 	GraphicPipeline(MainDevice* main_device, SwapChain* swap_chain, RenderPassHandler* render_pass_handler);
 
-	VkPipeline&		GetPipeline()   { return m_GraphicsPipeline; }
+	VkPipeline&		GetPipeline()   { return m_FirstPipeline; }
 	VkPipeline&		GetSecondPipeline() { return m_SecondPipeline; }
 
-	VkPipelineLayout& GetLayout()		{ return m_PipelineLayout; }
+	VkPipelineLayout& GetLayout()		{ return m_FirstPipelineLayout; }
 	VkPipelineLayout& GetSecondLayout()	{ return m_SecondPipelineLayout; }
 
 	VkShaderModule CreateShaderModules(const char* path);
 	VkPipelineShaderStageCreateInfo CreateVertexShaderStage(const char* vert_str);
 	VkPipelineShaderStageCreateInfo CreateFragmentShaderStage(const char* frag_str);
 
-	void SetDescriptorSet(VkDescriptorSetLayout& descriptorSetLayout, VkDescriptorSetLayout& textureObjects,
-		VkDescriptorSetLayout& inputSetLayout);
+	void SetDescriptorSetLayouts(
+		VkDescriptorSetLayout& descriptorSetLayout, VkDescriptorSetLayout& textureObjects,
+		VkDescriptorSetLayout& inputSetLayout, VkDescriptorSetLayout& light_set_layout);
 	void SetPushCostantRange(VkPushConstantRange& pushCostantRange);
 	void SetVertexStageBindingDescription();
 	void SetVertexttributeDescriptions();
@@ -29,7 +30,6 @@ public:
 	void SetScissor();
 
 	void CreateGraphicPipeline();
-	//void CreateShaderStages();
 	void CreateVertexInputStage();
 	void CreateInputAssemblyStage();
 	void CreateViewportScissorStage();
@@ -38,7 +38,6 @@ public:
 	void CreateMultisampleStage();
 	void CreateColourBlendingStage();
 	void CreateDepthStencilStage();
-	void CreatePipelineLayout();
 
 	void DestroyShaderModules();
 	void DestroyPipeline();
@@ -48,16 +47,17 @@ private:
 	SwapChain				*m_SwapChain;
 	RenderPassHandler		*m_RenderPassHandler;
 
-	VkDescriptorSetLayout	m_DescriptorSetLayout;
+	VkDescriptorSetLayout	m_ViewProjectionSetLayout;
 	VkDescriptorSetLayout	m_TextureSetLayout;
 	VkDescriptorSetLayout	m_InputSetLayout;
+	VkDescriptorSetLayout	m_LightSetLayout;
 	VkPushConstantRange		m_PushCostantRange;
 
 private:
-	VkPipeline		m_GraphicsPipeline;
+	VkPipeline		m_FirstPipeline;
 	VkPipeline		m_SecondPipeline;
 
-	VkPipelineLayout  m_PipelineLayout;
+	VkPipelineLayout  m_FirstPipelineLayout;
 	VkPipelineLayout  m_SecondPipelineLayout;
 		
 	VkPipelineShaderStageCreateInfo		   m_ShaderStages[2]	  = {};

@@ -11,12 +11,12 @@ VulkanRenderer::VulkanRenderer()
 	m_PresentationQueue					= 0;
 	m_MainDevice.LogicalDevice			= 0;
 	m_MainDevice.PhysicalDevice			= 0;
-	m_UBOViewProjection.projection		= glm::mat4(1.f);
-	m_UBOViewProjection.view			= glm::mat4(1.f);
+	m_ViewProjectionData.projection		= glm::mat4(1.f);
+	m_ViewProjectionData.view			= glm::mat4(1.f);
 	m_MainDevice.MinUniformBufferOffset	= 0;
 	
 	m_RenderPassHandler		= RenderPassHandler(&m_MainDevice, &m_SwapChain);
-	m_DescriptorsHandler	= DescriptorsHandler(&m_MainDevice.LogicalDevice);
+	m_Descriptors			= Descriptors(&m_MainDevice.LogicalDevice);
 	m_SwapChain				= SwapChain(&m_MainDevice, &m_Surface, m_Window, m_QueueFamilyIndices);
 	m_GraphicPipeline		= GraphicPipeline(&m_MainDevice, &m_SwapChain, &m_RenderPassHandler);
 	m_CommandHandler		= CommandHandler(&m_MainDevice, &m_GraphicPipeline, m_RenderPassHandler.GetRenderPassReference());
@@ -35,25 +35,27 @@ int VulkanRenderer::Init(void* t_window)
 	try
 	{
 		Utility::Setup(&m_MainDevice, &m_Surface, &m_CommandHandler.GetCommandPool(), &m_GraphicsQueue);
-		CreateRenderKernel();
+
+		CreateKernel();
 
 		m_SwapChain.CreateSwapChain();
 
 		m_RenderPassHandler.CreateRenderPass();
-		
-		CreatePushCostantRange();
-		
-		m_DescriptorsHandler.CreateSetLayouts();
-		VkDescriptorSetLayout vpDescSet	= m_DescriptorsHandler.GetViewProjectionDescriptorSetLayout();
-		VkDescriptorSetLayout texDesSet	= m_DescriptorsHandler.GetTextureDescriptorSetLayout();
-		VkDescriptorSetLayout inpDesSet = m_DescriptorsHandler.GetInputDescriptorSetLayout();
+			
+		m_Descriptors.CreateSetLayouts();
+		VkDescriptorSetLayout vp_set_layout		= m_Descriptors.GetViewProjectionSetLayout();
+		VkDescriptorSetLayout tex_set_layout	= m_Descriptors.GetTextureSetLayout();
+		VkDescriptorSetLayout inp_set_layout	= m_Descriptors.GetInputSetLayout();
+		VkDescriptorSetLayout light_set_layout	= m_Descriptors.GetLightSetLayout();
+		m_GraphicPipeline.SetDescriptorSetLayouts(vp_set_layout, tex_set_layout, inp_set_layout, light_set_layout);
 
-		m_GraphicPipeline.SetDescriptorSet(vpDescSet, texDesSet, inpDesSet);
+		SetupPushCostantRange();
 		m_GraphicPipeline.SetPushCostantRange(m_PushCostantRange);
+
 		m_GraphicPipeline.CreateGraphicPipeline();
 
-
 		m_ColorBufferImages.resize(m_SwapChain.SwapChainImagesSize());
+
 		for (size_t i = 0; i < m_ColorBufferImages.size(); i++)
 		{
 			Utility::CreateColorBufferImage(m_ColorBufferImages[i], m_SwapChain.GetExtent());			 
@@ -70,18 +72,17 @@ int VulkanRenderer::Init(void* t_window)
 
 		CreateUniformBuffers();
 
-		m_DescriptorsHandler.CreateDescriptorPools(m_SwapChain.SwapChainImagesSize(), 
-			m_viewProjectionUBO.size());
+		m_Descriptors.CreateDescriptorPools(m_SwapChain.SwapChainImagesSize(), m_ViewProjectionUBO.size(), m_LightUBO.size());
 
-		m_DescriptorsHandler.CreateDescriptorSets(m_viewProjectionUBO, sizeof(UboViewProjection), 
-			m_SwapChain.SwapChainImagesSize(),
-			m_ColorBufferImages, m_DepthBufferImage);
+		m_Descriptors.CreateViewProjectionDescriptorSets(m_ViewProjectionUBO, sizeof(ViewProjectionData), m_SwapChain.SwapChainImagesSize());
+		m_Descriptors.CreateInputAttachmentsDescriptorSets(m_SwapChain.SwapChainImagesSize(), m_ColorBufferImages, m_DepthBufferImage);
+		m_Descriptors.CreateLightDescriptorSets(m_LightUBO, sizeof(LightData), m_SwapChain.SwapChainImagesSize());
 
 		CreateSynchronizationObjects();
-		SetViewProjectionDataStructure();
+		SetUniformDataStructures();
 
 		TextureLoader::GetInstance()->Init(GetRenderData(), &m_TextureObjects);
-		m_Scene.PassRenderData(GetRenderData(), &m_DescriptorsHandler);
+		m_Scene.PassRenderData(GetRenderData());
 		m_Scene.LoadScene(m_MeshList, m_TextureObjects);
 
 		CreateMeshModel("Models/Vivi_Final.obj");
@@ -125,12 +126,11 @@ void VulkanRenderer::Draw(ImDrawData *draw_data)
 	m_CommandHandler.RecordCommands(
 		draw_data, imageIndex, m_SwapChain.GetExtent(),
 		m_SwapChain.GetFrameBuffers(), m_MeshList, m_MeshModelList, m_TextureObjects, 
-		m_DescriptorsHandler.GetDescriptorSets(),
-		m_DescriptorsHandler.GetInputDescriptorSets());
+		m_Descriptors.GetDescriptorSets(),
+		m_Descriptors.GetInputDescriptorSets(),
+		m_Descriptors.GetLightDescriptorSets());
 	
-
-	// Copia nell'UniformBuffer della GPU le matrici m_uboViewProjection
-	UpdateUniformBuffers(imageIndex);
+	UpdateUniformBuffersWithData(imageIndex);
 
 	// Stages dove aspettare che il semaforo sia SIGNALED (all'output del final color)
 	VkPipelineStageFlags waitStages[] = {
@@ -167,11 +167,11 @@ void VulkanRenderer::Draw(ImDrawData *draw_data)
 	// Presentazione dell'immagine a schermo
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType			   = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.waitSemaphoreCount = 1;									// Numero di semafori da aspettare prima di renderizzare
+	presentInfo.waitSemaphoreCount = 1;												// Numero di semafori da aspettare prima di renderizzare
 	presentInfo.pWaitSemaphores	   = &m_SyncObjects[m_CurrentFrame].RenderFinished; // Aspetta che il rendering dell'immagine sia terminato
-	presentInfo.swapchainCount	   = 1;									// Numero di swapchains a cui presentare
-	presentInfo.pSwapchains		   = m_SwapChain.GetSwapChainData();	 					// Swapchain contenente le immagini
-	presentInfo.pImageIndices	   = &imageIndex;						// Indice dell'immagine nella SwapChain da visualizzare (quella nuova pescata dalle immagini disponibili)
+	presentInfo.swapchainCount	   = 1;												// Numero di swapchains a cui presentare
+	presentInfo.pSwapchains		   = m_SwapChain.GetSwapChainData();	 			// Swapchain contenente le immagini
+	presentInfo.pImageIndices	   = &imageIndex;									// Indice dell'immagine nella SwapChain da visualizzare (quella nuova pescata dalle immagini disponibili)
 
 	// Prima di effettuare l'operazione di presentazione dell'immagine a schermo si deve assicurare
 	// che il render della nuova immagine sia pronto, cosa che viene assicurata dal semaforo 'm_renderFinished' del frame corrente.
@@ -216,14 +216,12 @@ void VulkanRenderer::HandleMinimization()
 
 	m_GraphicPipeline.CreateGraphicPipeline();
 
-	// Color buffer images
 	m_ColorBufferImages.resize(m_SwapChain.SwapChainImagesSize());
 	for (size_t i = 0; i < m_ColorBufferImages.size(); i++)
 	{
 		Utility::CreateColorBufferImage(m_ColorBufferImages[i], m_SwapChain.GetExtent());
 	}
 
-	// Depth Buffer image
 	Utility::CreateDepthBufferImage(m_DepthBufferImage, m_SwapChain.GetExtent());
 
 	m_SwapChain.CreateFrameBuffers(m_DepthBufferImage.ImageView, m_ColorBufferImages);
@@ -279,7 +277,7 @@ void VulkanRenderer::CreateInstance()
 #endif
 }
 
-void VulkanRenderer::CreateRenderKernel()
+void VulkanRenderer::CreateKernel()
 {
 	CreateInstance();
 	CreateSurface();
@@ -523,6 +521,11 @@ void VulkanRenderer::CreateSurface()
 	}
 }
 
+const int VulkanRenderer::GetCurrentFrame() const
+{
+	return m_CurrentFrame;
+}
+
 void VulkanRenderer::CreateSynchronizationObjects()
 {
 	m_SyncObjects.resize(MAX_FRAMES_IN_FLIGHT);
@@ -545,31 +548,37 @@ void VulkanRenderer::CreateSynchronizationObjects()
 	}
 }
 
-void VulkanRenderer::CreatePushCostantRange()
+void VulkanRenderer::SetupPushCostantRange()
 {
 	m_PushCostantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;  // Stage dove finiranno le push costant
 	m_PushCostantRange.offset	  = 0;
 	m_PushCostantRange.size		  = sizeof(Model);
 }
 
-void VulkanRenderer::SetViewProjectionDataStructure()
+void VulkanRenderer::SetUniformDataStructures()
 {
+	// View-Projection
 	float const aspectRatio					= static_cast<float>(m_SwapChain.GetExtentWidth()) / static_cast<float>(m_SwapChain.GetExtentHeight());
-	m_UBOViewProjection.projection			= glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.f);
-	m_UBOViewProjection.view				= glm::lookAt(glm::vec3(0.f, 0.f, 3.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.0f, 0.f));
-	m_UBOViewProjection.projection[1][1]	= m_UBOViewProjection.projection[1][1] * -1.0f;
+	m_ViewProjectionData.projection			= glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.f);
+	m_ViewProjectionData.view				= glm::lookAt(glm::vec3(0.f, 0.f, 3.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.0f, 0.f));
+	m_ViewProjectionData.projection[1][1]	= m_ViewProjectionData.projection[1][1] * -1.0f;
+
+	// Lights
+	Light l = Light(1.0f, 0.0f, 0.0f, 1.0f);
+
+	m_LightData = l.GetUBOData();
 }
 
 void VulkanRenderer::CreateUniformBuffers()
 {
 	BufferSettings buffer_settings;
-	buffer_settings.size		= sizeof(m_UBOViewProjection);
+	buffer_settings.size		= sizeof(m_ViewProjectionData);
 	buffer_settings.usage		= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 	buffer_settings.properties	= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
 	// Un UBO per ogni immagine della Swap Chain
-	m_viewProjectionUBO.resize(m_SwapChain.SwapChainImagesSize());
-	m_viewProjectionUniformBufferMemory.resize(m_SwapChain.SwapChainImagesSize());
+	m_ViewProjectionUBO.resize(m_SwapChain.SwapChainImagesSize());
+	m_ViewProjectionUBOMemory.resize(m_SwapChain.SwapChainImagesSize());
 	
 	/*
 	m_modelDynamicUBO.resize(m_swapChainImages.size());
@@ -577,7 +586,7 @@ void VulkanRenderer::CreateUniformBuffers()
 
 	for (size_t i = 0; i < m_SwapChain.SwapChainImagesSize(); i++)
 	{
-		Utility::CreateBuffer(buffer_settings, &m_viewProjectionUBO[i], &m_viewProjectionUniformBufferMemory[i]);
+		Utility::CreateBuffer(buffer_settings, &m_ViewProjectionUBO[i], &m_ViewProjectionUBOMemory[i]);
 		/* DYNAMIC UBO
 		createBuffer(m_mainDevice.physicalDevice, m_mainDevice.LogicalDevice,
 			modelBufferSize,
@@ -585,37 +594,30 @@ void VulkanRenderer::CreateUniformBuffers()
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 			&m_modelDynamicUBO[i], &m_modelDynamicUniformBufferMemory[i]);*/
 	}
-}
 
-// Copia dei dati m_uboViewProjection della CPU nell'UniformBufferObject della GPU
-void VulkanRenderer::UpdateUniformBuffers(uint32_t imageIndex)
-{
-	/* Copia dei dati CPU-GPU VIEW-PROJECTION */
-	// Mappa l'UniformBufferObject nello spazio di indirizzamento dell'applicazione, salvando nel puntatore 'data' l'intervallo mappato sulla memoria.
-	void* data;
-	vkMapMemory(m_MainDevice.LogicalDevice, m_viewProjectionUniformBufferMemory[imageIndex], 0, 
-		sizeof(UboViewProjection), 0, &data);
-	memcpy(data, &m_UBOViewProjection, sizeof(UboViewProjection));
-	vkUnmapMemory(m_MainDevice.LogicalDevice, m_viewProjectionUniformBufferMemory[imageIndex]);
+	buffer_settings.size = sizeof(LightData);
 
-	/* Copia delle Model matrix nei blocchi di memoria allineati (DYNAMIC UNIFORM BUFFER) */
-	/*for(size_t i = 0; i < m_meshList.size(); i++)
+	m_LightUBO.resize(m_SwapChain.SwapChainImagesSize());
+	m_LightUBOMemory.resize(m_SwapChain.SwapChainImagesSize());
+
+	for (size_t i = 0; i < m_SwapChain.SwapChainImagesSize(); ++i)
 	{
-		Model* thisModel = (Model*)((uint64_t)m_modelTransferSpace + (i * m_modelUniformAlignment));
-		*thisModel = m_meshList[i].getModel();
-	}*/
-
-	// Mappa l'UniformBufferObject nello spazio di indirizzamento dell'applicazione, salvando nel puntatore 'data' l'intervallo mappato sulla memoria.
-	/*vkMapMemory(m_mainDevice.LogicalDevice,
-		m_modelDynamicUniformBufferMemory[imageIndex], 0,
-		m_modelUniformAlignment * m_meshList.size(), 0, &data);
-	memcpy(data, m_modelTransferSpace, m_modelUniformAlignment * m_meshList.size());
-	vkUnmapMemory(m_mainDevice.LogicalDevice, m_modelDynamicUniformBufferMemory[imageIndex]);*/
+		Utility::CreateBuffer(buffer_settings, &m_LightUBO[i], &m_LightUBOMemory[i]);
+	}
 }
 
-VulkanRenderer::~VulkanRenderer()
+void VulkanRenderer::UpdateUniformBuffersWithData(uint32_t imageIndex)
 {
-	Cleanup();
+	void* vp_data;
+	vkMapMemory(m_MainDevice.LogicalDevice, m_ViewProjectionUBOMemory[imageIndex], 0, 
+		sizeof(ViewProjectionData), 0, &vp_data);
+	memcpy(vp_data, &m_ViewProjectionData, sizeof(ViewProjectionData));
+	vkUnmapMemory(m_MainDevice.LogicalDevice, m_ViewProjectionUBOMemory[imageIndex]);
+
+	void* light_data;
+	vkMapMemory(m_MainDevice.LogicalDevice, m_LightUBOMemory[imageIndex], 0, sizeof(LightData), 0, &light_data);
+	memcpy(light_data, &m_LightData, sizeof(LightData));
+	vkUnmapMemory(m_MainDevice.LogicalDevice, m_LightUBOMemory[imageIndex]);
 }
 
 void VulkanRenderer::Cleanup()
@@ -634,10 +636,10 @@ void VulkanRenderer::Cleanup()
 
 	GUI::GetInstance()->Destroy();
 
-	m_DescriptorsHandler.DestroyImguiDescriptorPool();
+	m_Descriptors.DestroyImguiPool();
 
-	m_DescriptorsHandler.DestroyTexturePool();
-	m_DescriptorsHandler.DestroyTextureLayout();
+	m_Descriptors.DestroyTexturePool();
+	m_Descriptors.DestroyTextureLayout();
 
 	vkDestroySampler(m_MainDevice.LogicalDevice, m_TextureObjects.TextureSampler, nullptr);
 
@@ -648,8 +650,8 @@ void VulkanRenderer::Cleanup()
 		vkFreeMemory(m_MainDevice.LogicalDevice, m_TextureObjects.TextureImageMemory[i], nullptr);
 	}
 
-	m_DescriptorsHandler.DestroyInputDescriptorPool();
-	m_DescriptorsHandler.DestroyInputSetLayout();
+	m_Descriptors.DestroyInputPool();
+	m_Descriptors.DestroyInputAttachmentsLayout();
 	for (size_t i = 0; i < m_ColorBufferImages.size(); i++)
 	{
 		m_ColorBufferImages[i].DestroyAndFree(m_MainDevice);
@@ -657,13 +659,22 @@ void VulkanRenderer::Cleanup()
 
 	m_DepthBufferImage.DestroyAndFree(m_MainDevice);
 	
-	m_DescriptorsHandler.DestroyViewProjectionPool();
-	m_DescriptorsHandler.DestroyViewProjectionLayout();
+	m_Descriptors.DestroyViewProjectionPool();
+	m_Descriptors.DestroyViewProjectionLayout();
 
-	for (size_t i = 0; i < m_viewProjectionUBO.size(); ++i)
+	for (size_t i = 0; i < m_ViewProjectionUBO.size(); ++i)
 	{
-		vkDestroyBuffer(m_MainDevice.LogicalDevice, m_viewProjectionUBO[i], nullptr);
-		vkFreeMemory(m_MainDevice.LogicalDevice, m_viewProjectionUniformBufferMemory[i], nullptr);
+		vkDestroyBuffer(m_MainDevice.LogicalDevice, m_ViewProjectionUBO[i], nullptr);
+		vkFreeMemory(m_MainDevice.LogicalDevice, m_ViewProjectionUBOMemory[i], nullptr);
+	}
+
+	m_Descriptors.DestroyLightPool();
+	m_Descriptors.DestroyLightLayout();
+
+	for (size_t i = 0; i < m_LightUBO.size(); ++i)
+	{
+		vkDestroyBuffer(m_MainDevice.LogicalDevice, m_LightUBO[i], nullptr);
+		vkFreeMemory(m_MainDevice.LogicalDevice, m_LightUBOMemory[i], nullptr);
 	}
 
 	for (size_t i = 0; i < m_MeshList.size(); i++)
@@ -700,27 +711,25 @@ void VulkanRenderer::Cleanup()
 const VulkanRenderData VulkanRenderer::GetRenderData()
 {
 	VulkanRenderData data = {};
-	data.main_device			= m_MainDevice;
-	data.instance				= m_VulkanInstance;
-	data.physical_device		= m_MainDevice.PhysicalDevice;
-	data.device					= m_MainDevice.LogicalDevice;
-	data.graphic_queue_index	= m_QueueFamilyIndices.GraphicsFamily;
-	data.graphic_queue			= m_GraphicsQueue;
-	data.imgui_descriptor_pool	= m_DescriptorsHandler.GetImguiDescriptorPool();
-	data.min_image_count		= 3;	// setup correct practice
-	data.image_count			= 3;	// setup correct practice
-	data.render_pass			= m_RenderPassHandler.GetRenderPass();
-	data.command_pool			= m_CommandHandler.GetCommandPool();
-	data.command_buffers		= m_CommandHandler.GetCommandBuffers();
-
-	data.texture_descriptor_layout = m_DescriptorsHandler.GetTextureDescriptorSetLayout();
-	data.texture_descriptor_pool = m_DescriptorsHandler.GetTexturePool();
-
+	data.main_device				= m_MainDevice;
+	data.instance					= m_VulkanInstance;
+	data.physical_device			= m_MainDevice.PhysicalDevice;
+	data.device						= m_MainDevice.LogicalDevice;
+	data.graphic_queue_index		= m_QueueFamilyIndices.GraphicsFamily;
+	data.graphic_queue				= m_GraphicsQueue;
+	data.imgui_descriptor_pool		= m_Descriptors.GetImguiDescriptorPool();
+	data.min_image_count			= 3;	// setup correct practice
+	data.image_count				= 3;	// setup correct practice
+	data.render_pass				= m_RenderPassHandler.GetRenderPass();
+	data.command_pool				= m_CommandHandler.GetCommandPool();
+	data.command_buffers			= m_CommandHandler.GetCommandBuffers();
+	data.texture_descriptor_layout	= m_Descriptors.GetTextureSetLayout();
+	data.texture_descriptor_pool	= m_Descriptors.GetTexturePool();
 
 	return data;
 }
 
-const int VulkanRenderer::GetCurrentFrame() const
+VulkanRenderer::~VulkanRenderer()
 {
-	return m_CurrentFrame;
+	Cleanup();
 }
