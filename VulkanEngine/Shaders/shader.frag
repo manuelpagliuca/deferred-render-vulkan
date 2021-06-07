@@ -1,18 +1,19 @@
 #version 450
 
-layout(location = 0) in vec3 fragCol;
-layout(location = 1) in vec2 fragTex;
+layout(location = 0) in vec3 fragWorldPos;
+layout(location = 1) in vec3 fragCol;
+layout(location = 2) in vec3 fragNrm;
+layout(location = 3) in vec2 fragTex;
 
 layout(set = 1, binding = 0) uniform sampler2D texture_sampler;
 
-layout(set = 2, binding = 0) uniform UboLight {
-	vec3 color;
-	float ambient_intensity;
-} ubo_light;
-
-layout(location = 0) out vec4 outColour; 	// Final output colour (must also have location
+layout(location = 0) out vec4 outPos; 	 // World Position	
+layout(location = 1) out vec4 outColour; // colour of the fragment
+layout(location = 2) out vec4 outNormal; // Normal	
 
 void main()
 {
-	outColour = ubo_light.ambient_intensity * texture(texture_sampler, fragTex);
+	outPos	 	= vec4(fragWorldPos, 1.0f);
+	outColour 	= vec4(texture(texture_sampler, fragTex).xyz, 1.0f);
+	outNormal 	= vec4(fragNrm, 1.0f);
 }

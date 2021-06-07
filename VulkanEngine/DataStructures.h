@@ -94,9 +94,11 @@ struct BufferImage {
 	VkFormat		Format		= {};
 	VkDeviceMemory  Memory		= {};
 	VkImageView		ImageView	= {};
+	VkSampler		Sampler		= {};
 
 	void DestroyAndFree(MainDevice &mainDevice)
 	{
+		vkDestroySampler(mainDevice.LogicalDevice, Sampler, nullptr);
 		vkDestroyImageView(mainDevice.LogicalDevice, ImageView, nullptr);
 		vkDestroyImage(mainDevice.LogicalDevice, Image, nullptr);
 		vkFreeMemory(mainDevice.LogicalDevice, Memory, nullptr);
@@ -104,6 +106,7 @@ struct BufferImage {
 };
 
 struct SubmissionSyncObjects {
+	VkSemaphore OffScreenAvailable;
 	VkSemaphore ImageAvailable; // Avvisa quanto l'immagine è disponibile
 	VkSemaphore RenderFinished; // Avvisa quando il rendering è terminato
 	VkFence		InFlight;		// Fence per il frame in esecuzione
@@ -124,5 +127,6 @@ struct Vertex
 {
 	glm::vec3 pos;
 	glm::vec3 col;
+	glm::vec3 nrm; // normal
 	glm::vec2 tex;
 };

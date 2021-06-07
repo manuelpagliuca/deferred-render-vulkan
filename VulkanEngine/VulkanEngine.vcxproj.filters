@@ -175,5 +175,7 @@
     <None Include="Shaders\shader.vert" />
     <None Include="imgui.ini" />
     <None Include="assimp-vc142-mt.dll" />
+    <None Include="Shaders\second_shader.frag" />
+    <None Include="Shaders\second_shader.vert" />
   </ItemGroup>
 </Project>

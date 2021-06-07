@@ -58,6 +58,8 @@
       <AdditionalIncludeDirectories>$(SolutionDir)Vendor\GLFW\include;C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)Vendor\GLM\;$(SolutionDir)Vendor\STB_IMAGE;$(SolutionDir)Vendor\ASSIMP\include;$(SolutionDir)VulkanEngine\tiny_obj_loader.h</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -76,6 +78,8 @@
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)Vendor\GLFW\include;C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)Vendor\GLM\;$(SolutionDir)Vendor\STB_IMAGE;$(SolutionDir)Vendor\ASSIMP\include;$(SolutionDir)VulkanEngine\tiny_obj_loader.h</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>ENABLED_VALIDATION_LAYERS;</UndefinePreprocessorDefinitions>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -148,6 +152,8 @@
     <None Include="assimp-vc142-mt.dll" />
     <None Include="imgui.ini" />
     <None Include="Shaders\frag.spv" />
+    <None Include="Shaders\second_shader.frag" />
+    <None Include="Shaders\second_shader.vert" />
     <None Include="Shaders\shader.frag" />
     <None Include="Shaders\shader.vert" />
     <None Include="Shaders\vert.spv" />

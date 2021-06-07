@@ -1,24 +1,55 @@
 #version 450
 
-layout(input_attachment_index = 0, binding = 0) uniform subpassInput inputColour; // Colour output from subpass 1
-layout(input_attachment_index = 1, binding = 1) uniform subpassInput inputDepth;  // Depth output from subpass 1
+#define NUM_LIGHTS 3
+
+struct UboLight {
+	vec3 	color;
+	float 	ambient_intensity;
+	vec3 	position;
+	float 	radius;
+};
+
+layout(set = 0, binding = 0) uniform sampler2D inputPosition;
+layout(set = 0, binding = 1) uniform sampler2D inputColour;
+layout(set = 0, binding = 2) uniform sampler2D inputNormal;
+
+layout(location = 0) in vec2 inUV;
 
 layout(location = 0) out vec4 colour;
 
+layout(set = 1, binding = 0) uniform UboLights { UboLight l[NUM_LIGHTS]; } ubo_lights;
+
 void main()
 {
-	int xHalf = 1400/2;
-	if(gl_FragCoord.x > xHalf)
+	colour = vec4(0.0f);
+	vec3 fragPos 	= texture(inputPosition, inUV.xy).rgb;
+	vec3 fragColour = texture(inputColour, inUV.xy).rgb;
+	vec3 fragNrm 	= texture(inputNormal, inUV.xy).rgb;
+	gl_FragDepth 	= fragPos.z;
+
+	for(int i = 0; i < NUM_LIGHTS; ++i)
 	{
-		float lowerBound = 0.98;
-		float upperBound = 1;
-		
-		float depth = subpassLoad(inputDepth).r;
-		float depthColourScaled = 1.0f - ((depth - lowerBound) / (upperBound - lowerBound));
-		colour = vec4(subpassLoad(inputColour).rgb * depthColourScaled, 1.0f);
+		vec3 L 				= ubo_lights.l[i].position.xyz - fragPos;
+
+		float distance 		= length(L);
+		float attenuation 	= ubo_lights.l[i].radius / (pow(distance, 2.0f) + 1.0f);
+
+		vec3 View 		= vec3(0.0f, 0.0f, 0.0f) - fragPos;
+
+		// normalized values
+		vec3 N 			= normalize(fragNrm);
+		L 				= normalize(L);
+		View 			= normalize(View);
+
+		float dotNL 	= max(0.0f, dot(N, L));
+		vec3 diffuse  	= ubo_lights.l[i].color * fragColour * dotNL * attenuation;
+
+		vec3 R 			= reflect(-L, N);
+		float dotRV 	= max(0.0f, dot(R, View));
+		vec3 specular 	= ubo_lights.l[i].color * fragColour * pow(dotRV, 16.0f) ; // * attenuation
+
+		colour.rgb 	   += diffuse + specular;
 	}
-	else
-	{
-		colour = subpassLoad(inputColour).rgba;
-	}
+
+	colour.a = 1.0f;
 }

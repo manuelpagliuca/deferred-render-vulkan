@@ -12,7 +12,8 @@ public:
 	void CreateSetLayouts();
 
 	void CreateViewProjectionDescriptorSets(const std::vector<VkBuffer>& view_projection_ubo, size_t data_size, size_t swapchain_images);
-	void CreateInputAttachmentsDescriptorSets(size_t swapchain_size, const std::vector<BufferImage>& color_buffer, const BufferImage& depth_buffer);
+	void CreateInputAttachmentsDescriptorSets(size_t swapchain_size, const std::vector<BufferImage>& position_buffer, 
+		const std::vector<BufferImage>& color_buffer, const std::vector<BufferImage>& normal_buffer);
 	void CreateLightDescriptorSets(const std::vector<VkBuffer>& ubo_light, size_t data_size, size_t swapchain_images);
 
 	VkDescriptorSetLayout& GetViewProjectionSetLayout();

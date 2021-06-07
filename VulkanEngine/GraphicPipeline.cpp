@@ -31,7 +31,7 @@ void GraphicPipeline::CreateGraphicPipeline()
 																	// VK_VERTEX_INPUT_RATE_INSTANCE	: Move to a vertex for the next instance
 
 	// How the data for an attribute is defined within a vertex
-	std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions;
+	std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions;
 
 	// Position Attribute
 	attributeDescriptions[0].binding	= 0;							// Which binding the data is at (should be same as above)
@@ -45,11 +45,17 @@ void GraphicPipeline::CreateGraphicPipeline()
 	attributeDescriptions[1].format		= VK_FORMAT_R32G32B32_SFLOAT;
 	attributeDescriptions[1].offset		= offsetof(Vertex, col);
 
-	// Texture Attribute
+	// Normal Attribute
 	attributeDescriptions[2].binding	= 0;
 	attributeDescriptions[2].location	= 2;
-	attributeDescriptions[2].format		= VK_FORMAT_R32G32_SFLOAT;
-	attributeDescriptions[2].offset		= offsetof(Vertex, tex);
+	attributeDescriptions[2].format		= VK_FORMAT_R32G32B32_SFLOAT;
+	attributeDescriptions[2].offset		= offsetof(Vertex, nrm);
+
+	// Texture Attribute
+	attributeDescriptions[3].binding	= 0;
+	attributeDescriptions[3].location	= 3;
+	attributeDescriptions[3].format		= VK_FORMAT_R32G32_SFLOAT;
+	attributeDescriptions[3].offset		= offsetof(Vertex, tex);
 
 	// -- VERTEX INPUT --
 	VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
@@ -112,7 +118,7 @@ void GraphicPipeline::CreateGraphicPipeline()
 									VK_COLOR_COMPONENT_G_BIT | 
 									VK_COLOR_COMPONENT_B_BIT | 
 									VK_COLOR_COMPONENT_A_BIT;
-	colourState.blendEnable		= VK_TRUE;													// Enable blending
+	colourState.blendEnable		= VK_FALSE;													// Enable blending
 
 	// Blending uses equation: (srcColorBlendFactor * new colour) colorBlendOp (dstColorBlendFactor * old colour)
 	colourState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
@@ -127,18 +133,24 @@ void GraphicPipeline::CreateGraphicPipeline()
 	colourState.alphaBlendOp		= VK_BLEND_OP_ADD;
 	// Summarised: (1 * new alpha) + (0 * old alpha) = new alpha
 
+	std::array<VkPipelineColorBlendAttachmentState, 3> colourStates
+	{
+		colourState,
+		colourState,
+		colourState
+	};
+
 	VkPipelineColorBlendStateCreateInfo colour_blending = {};
 	colour_blending.sType				= VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colour_blending.logicOpEnable		= VK_FALSE;				// Alternative to calculations is to use logical operations
-	colour_blending.attachmentCount		= 1;
-	colour_blending.pAttachments		= &colourState;
+	colour_blending.attachmentCount		= static_cast<uint32_t>(colourStates.size());
+	colour_blending.pAttachments		= colourStates.data();
 
 	// -- PIPELINE LAYOUT --
-	std::array<VkDescriptorSetLayout, 3> desc_set_layouts =
+	std::array<VkDescriptorSetLayout, 2> desc_set_layouts =
 	{
 		m_ViewProjectionSetLayout,
-		m_TextureSetLayout, 
-		m_LightSetLayout
+		m_TextureSetLayout,
 	};
 
 	VkPipelineLayoutCreateInfo fst_pipeline_layout = {};
@@ -178,7 +190,7 @@ void GraphicPipeline::CreateGraphicPipeline()
 	pipeline_info.pColorBlendState		= &colour_blending;
 	pipeline_info.pDepthStencilState	= &depth_stencil_info;
 	pipeline_info.layout				= m_FirstPipelineLayout;									
-	pipeline_info.renderPass			= *m_RenderPassHandler->GetRenderPassReference();
+	pipeline_info.renderPass			= *m_RenderPassHandler->GetOffScreenRenderPassReference();
 	pipeline_info.subpass				= 0;											
 	pipeline_info.basePipelineHandle	= VK_NULL_HANDLE;	
 	pipeline_info.basePipelineIndex		= -1;				
@@ -201,13 +213,26 @@ void GraphicPipeline::CreateGraphicPipeline()
 	vertexInputCreateInfo.vertexAttributeDescriptionCount	= 0;
 	vertexInputCreateInfo.pVertexAttributeDescriptions		= nullptr;
 
+	colour_blending.attachmentCount							= 1;
+	colour_blending.pAttachments							= &colourState;
+
+	rasterizerCreateInfo.cullMode							= VK_CULL_MODE_FRONT_BIT;
+	rasterizerCreateInfo.frontFace							= VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+
 	depth_stencil_info.depthWriteEnable						= VK_FALSE;
+
+	std::array<VkDescriptorSetLayout, 2> snd_pipeline_desc_set_layouts =
+	{
+		m_InputSetLayout,
+		m_LightSetLayout
+	};
 
 	// Create new pipeline layout
 	VkPipelineLayoutCreateInfo snd_pipeline_layout = {};
 	snd_pipeline_layout.sType					= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	snd_pipeline_layout.setLayoutCount			= 1;
-	snd_pipeline_layout.pSetLayouts				= &m_InputSetLayout;
+	snd_pipeline_layout.setLayoutCount			= static_cast<uint32_t>(snd_pipeline_desc_set_layouts.size());
+	snd_pipeline_layout.pSetLayouts				= snd_pipeline_desc_set_layouts.data();
 	snd_pipeline_layout.pushConstantRangeCount	= 0;
 	snd_pipeline_layout.pPushConstantRanges		= nullptr;
 
@@ -217,9 +242,10 @@ void GraphicPipeline::CreateGraphicPipeline()
 		throw std::runtime_error("Failed to create a Pipeline Layout!");
 	}
 
-	pipeline_info.pStages	= m_ShaderStages;			// Update second shader stage list
-	pipeline_info.layout	= m_SecondPipelineLayout;	
-	pipeline_info.subpass	= 1;						
+	pipeline_info.pStages		= m_ShaderStages;			// Update second shader stage list
+	pipeline_info.layout		= m_SecondPipelineLayout;	
+	pipeline_info.subpass		= 0;
+	pipeline_info.renderPass	= *m_RenderPassHandler->GetRenderPassReference();
 
 	result = vkCreateGraphicsPipelines(m_MainDevice->LogicalDevice, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &m_SecondPipeline);
 

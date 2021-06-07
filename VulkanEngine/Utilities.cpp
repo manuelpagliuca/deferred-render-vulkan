@@ -297,7 +297,7 @@ void Utility::CreateDepthBufferImage(BufferImage& image, const VkExtent2D &image
 
 void Utility::CreateColorBufferImage(BufferImage& image, const VkExtent2D& image_extent)
 {
-	const std::vector<VkFormat> formats = { VK_FORMAT_R8G8B8A8_UNORM };
+	const std::vector<VkFormat> formats = { VK_FORMAT_R32G32B32A32_SFLOAT };
 	const VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
 	const VkFormatFeatureFlags format_flags = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
@@ -308,12 +308,87 @@ void Utility::CreateColorBufferImage(BufferImage& image, const VkExtent2D& image
 	image_info.height = image_extent.height;
 	image_info.format = image.Format;
 	image_info.tiling = tiling;
-	image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+	image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 	image_info.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
 	image.Image = Utility::CreateImage(image_info, &image.Memory);
 
 	image.ImageView = Utility::CreateImageView(image.Image, image.Format, VK_IMAGE_ASPECT_COLOR_BIT);
+
+	{
+		VkSamplerCreateInfo samplerCreateInfo = {};
+		samplerCreateInfo.sType						= VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerCreateInfo.magFilter					= VK_FILTER_NEAREST;		// linear interpolation between the texels
+		samplerCreateInfo.minFilter					= VK_FILTER_NEAREST;		// quando viene miniaturizzata come renderizzarla (lerp)
+		samplerCreateInfo.addressModeU				= VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerCreateInfo.addressModeV				= VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerCreateInfo.addressModeW				= VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerCreateInfo.borderColor				= VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+		samplerCreateInfo.unnormalizedCoordinates	= VK_FALSE;			// è normalizzata
+		samplerCreateInfo.mipmapMode				= VK_SAMPLER_MIPMAP_MODE_NEAREST;
+		samplerCreateInfo.mipLodBias				= 0.0f;
+		samplerCreateInfo.minLod					= 0.0f;
+		samplerCreateInfo.maxLod					= 1.0f;
+		samplerCreateInfo.anisotropyEnable			= VK_TRUE;
+		samplerCreateInfo.maxAnisotropy				= 16;
+		samplerCreateInfo.compareEnable				= VK_FALSE;
+		samplerCreateInfo.compareOp					= VK_COMPARE_OP_NEVER;
+
+		image.Sampler = Utility::CreateSampler(samplerCreateInfo);
+	}
+}
+
+void Utility::CreatePositionBufferImage(BufferImage& image, const VkExtent2D& image_extent)
+{
+	const std::vector<VkFormat> formats = { VK_FORMAT_R32G32B32A32_SFLOAT };
+	const VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL;
+	const VkFormatFeatureFlags format_flags = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	image.Format = Utility::ChooseSupportedFormat(formats, tiling, format_flags);
+
+	ImageInfo image_info = {};
+	image_info.width = image_extent.width;
+	image_info.height = image_extent.height;
+	image_info.format = image.Format;
+	image_info.tiling = tiling;
+	image_info.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	image_info.properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+	image.Image = Utility::CreateImage(image_info, &image.Memory);
+
+	image.ImageView = Utility::CreateImageView(image.Image, image.Format, VK_IMAGE_ASPECT_COLOR_BIT);
+
+	{
+		VkSamplerCreateInfo samplerCreateInfo = {};
+		samplerCreateInfo.sType						= VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerCreateInfo.magFilter					= VK_FILTER_NEAREST;		// linear interpolation between the texels
+		samplerCreateInfo.minFilter					= VK_FILTER_NEAREST;		// quando viene miniaturizzata come renderizzarla (lerp)
+		samplerCreateInfo.addressModeU				= VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerCreateInfo.addressModeV				= VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerCreateInfo.addressModeW				= VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		samplerCreateInfo.borderColor				= VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+		samplerCreateInfo.unnormalizedCoordinates	= VK_FALSE;			// è normalizzata
+		samplerCreateInfo.mipmapMode				= VK_SAMPLER_MIPMAP_MODE_NEAREST;
+		samplerCreateInfo.mipLodBias				= 0.0f;
+		samplerCreateInfo.minLod					= 0.0f;
+		samplerCreateInfo.maxLod					= 1.0f;
+		samplerCreateInfo.anisotropyEnable			= VK_TRUE;
+		samplerCreateInfo.maxAnisotropy				= 16;
+		samplerCreateInfo.compareEnable				= VK_FALSE;
+		samplerCreateInfo.compareOp					= VK_COMPARE_OP_NEVER;
+
+		image.Sampler = Utility::CreateSampler(samplerCreateInfo);
+	}
+}
+
+VkSampler Utility::CreateSampler(const VkSamplerCreateInfo& sampler_create_info) {
+	VkSampler sampler;
+	VkResult result = vkCreateSampler(m_MainDevice->LogicalDevice, &sampler_create_info, nullptr, &sampler);
+
+	if (result != VK_SUCCESS)
+		throw std::runtime_error("Failed to create a Texture Sampler!");
+
+	return sampler;
 }
 
 uint32_t Utility::FindMemoryTypeIndex(uint32_t supportedMemoryTypes, const VkMemoryPropertyFlags &properties)

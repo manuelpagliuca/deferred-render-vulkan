@@ -117,6 +117,8 @@ Mesh MeshModel::LoadMesh(VkPhysicalDevice newPhysicalDevice, VkDevice newDevice,
 		// Impostazione della posizione
 		vertices[i].pos = { mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z };
 
+		vertices[i].nrm = { mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z };
+
 		// Set tex coords
 		if (mesh->mTextureCoords[0])
 		{

@@ -15,11 +15,12 @@ VulkanRenderer::VulkanRenderer()
 	m_ViewProjectionData.view			= glm::mat4(1.f);
 	m_MainDevice.MinUniformBufferOffset	= 0;
 	
-	m_RenderPassHandler		= RenderPassHandler(&m_MainDevice, &m_SwapChain);
-	m_Descriptors			= Descriptors(&m_MainDevice.LogicalDevice);
-	m_SwapChain				= SwapChain(&m_MainDevice, &m_Surface, m_Window, m_QueueFamilyIndices);
-	m_GraphicPipeline		= GraphicPipeline(&m_MainDevice, &m_SwapChain, &m_RenderPassHandler);
-	m_CommandHandler		= CommandHandler(&m_MainDevice, &m_GraphicPipeline, m_RenderPassHandler.GetRenderPassReference());
+	m_RenderPassHandler			= RenderPassHandler(&m_MainDevice, &m_SwapChain);
+	m_Descriptors				= Descriptors(&m_MainDevice.LogicalDevice);
+	m_SwapChain					= SwapChain(&m_MainDevice, &m_Surface, m_Window, m_QueueFamilyIndices);
+	m_GraphicPipeline			= GraphicPipeline(&m_MainDevice, &m_SwapChain, &m_RenderPassHandler);
+	m_CommandHandler			= CommandHandler(&m_MainDevice, &m_GraphicPipeline, &m_RenderPassHandler);
+	m_OffScreenCommandHandler	= CommandHandler(&m_MainDevice, &m_GraphicPipeline, &m_RenderPassHandler);
 }
 
 int VulkanRenderer::Init(void* t_window)
@@ -40,6 +41,7 @@ int VulkanRenderer::Init(void* t_window)
 
 		m_SwapChain.CreateSwapChain();
 
+		m_RenderPassHandler.CreateOffScreenRenderPass();
 		m_RenderPassHandler.CreateRenderPass();
 			
 		m_Descriptors.CreateSetLayouts();
@@ -54,11 +56,15 @@ int VulkanRenderer::Init(void* t_window)
 
 		m_GraphicPipeline.CreateGraphicPipeline();
 
+		m_PositionBufferImages.resize(m_SwapChain.SwapChainImagesSize());
 		m_ColorBufferImages.resize(m_SwapChain.SwapChainImagesSize());
+		m_NormalBufferImages.resize(m_SwapChain.SwapChainImagesSize());
 
 		for (size_t i = 0; i < m_ColorBufferImages.size(); i++)
 		{
-			Utility::CreateColorBufferImage(m_ColorBufferImages[i], m_SwapChain.GetExtent());			 
+			Utility::CreatePositionBufferImage(m_PositionBufferImages[i], m_SwapChain.GetExtent());
+			Utility::CreatePositionBufferImage(m_ColorBufferImages[i], m_SwapChain.GetExtent());
+			Utility::CreatePositionBufferImage(m_NormalBufferImages[i], m_SwapChain.GetExtent());
 		}
 
 		Utility::CreateDepthBufferImage(m_DepthBufferImage, m_SwapChain.GetExtent());
@@ -66,8 +72,12 @@ int VulkanRenderer::Init(void* t_window)
 		m_SwapChain.SetRenderPass(m_RenderPassHandler.GetRenderPassReference());
 		m_SwapChain.CreateFrameBuffers(m_DepthBufferImage.ImageView, m_ColorBufferImages);
 
+		CreateOffScreenFrameBuffer();
+
 		m_CommandHandler.CreateCommandPool(m_QueueFamilyIndices);
 		m_CommandHandler.CreateCommandBuffers(m_SwapChain.FrameBuffersSize());
+		m_OffScreenCommandHandler.CreateCommandPool(m_QueueFamilyIndices);
+		m_OffScreenCommandHandler.CreateCommandBuffers(m_SwapChain.FrameBuffersSize());
 		m_TextureObjects.CreateSampler(m_MainDevice);
 
 		CreateUniformBuffers();
@@ -75,7 +85,7 @@ int VulkanRenderer::Init(void* t_window)
 		m_Descriptors.CreateDescriptorPools(m_SwapChain.SwapChainImagesSize(), m_ViewProjectionUBO.size(), m_LightUBO.size());
 
 		m_Descriptors.CreateViewProjectionDescriptorSets(m_ViewProjectionUBO, sizeof(ViewProjectionData), m_SwapChain.SwapChainImagesSize());
-		m_Descriptors.CreateInputAttachmentsDescriptorSets(m_SwapChain.SwapChainImagesSize(), m_ColorBufferImages, m_DepthBufferImage);
+		m_Descriptors.CreateInputAttachmentsDescriptorSets(m_SwapChain.SwapChainImagesSize(), m_PositionBufferImages, m_ColorBufferImages, m_NormalBufferImages);
 		m_Descriptors.CreateLightDescriptorSets(m_LightUBO, sizeof(LightData), m_SwapChain.SwapChainImagesSize());
 
 		CreateSynchronizationObjects();
@@ -97,6 +107,36 @@ int VulkanRenderer::Init(void* t_window)
 	return 0;
 }
 
+void VulkanRenderer::CreateOffScreenFrameBuffer() {
+	m_OffScreenFrameBuffer.resize(m_SwapChain.FrameBuffersSize());
+
+	for (uint32_t i = 0; i < m_SwapChain.FrameBuffersSize(); ++i)
+	{
+		std::array<VkImageView, 4> attachments = {
+			m_PositionBufferImages[i].ImageView,
+			m_ColorBufferImages[i].ImageView,
+			m_NormalBufferImages[i].ImageView,
+			m_DepthBufferImage.ImageView
+		};
+
+		VkFramebufferCreateInfo frameBufferCreateInfo = {};
+		frameBufferCreateInfo.sType				= VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		frameBufferCreateInfo.renderPass		= m_RenderPassHandler.GetOffScreenRenderPass();
+		frameBufferCreateInfo.attachmentCount	= static_cast<uint32_t>(attachments.size());
+		frameBufferCreateInfo.pAttachments		= attachments.data();
+		frameBufferCreateInfo.width				= m_SwapChain.GetExtentWidth();
+		frameBufferCreateInfo.height			= m_SwapChain.GetExtentHeight();
+		frameBufferCreateInfo.layers			= 1;
+
+		VkResult result = vkCreateFramebuffer(m_MainDevice.LogicalDevice, &frameBufferCreateInfo, nullptr, &m_OffScreenFrameBuffer[i]);
+
+		if (result != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to create an offscreen Framebuffer!");
+		}
+	}
+}
+
 void VulkanRenderer::UpdateModel(int modelID, glm::mat4 newModel)
 {
 	if (modelID >= m_MeshList.size())
@@ -107,58 +147,60 @@ void VulkanRenderer::UpdateModel(int modelID, glm::mat4 newModel)
 
 void VulkanRenderer::Draw(ImDrawData *draw_data)
 {
-	// Aspetta 1 Fence di essere nello stato di SIGNALED 
-	// Aspettare per il dato Fence il segnale dell'ultimo draw effettuato prima di continuare
-	vkWaitForFences(m_MainDevice.LogicalDevice, 1, &m_SyncObjects[m_CurrentFrame].InFlight, VK_TRUE, UINT64_MAX);
+	vkWaitForFences(m_MainDevice.LogicalDevice, 1, &m_SyncObjects[m_CurrentFrame].InFlight, VK_TRUE, std::numeric_limits<uint64_t>::max()); // Aspetto che l'ultimo draw venga effettuato
 
-	// Metto la Fence ad UNSIGNALED (la GPU deve aspettare per la prossima operazione di draw)
-	vkResetFences(m_MainDevice.LogicalDevice, 1, &m_SyncObjects[m_CurrentFrame].InFlight);
+	vkResetFences(m_MainDevice.LogicalDevice, 1, &m_SyncObjects[m_CurrentFrame].InFlight); // InFlight messo ad UNSIGNALED
 	
-	// Recupero l'index della prossima immagine disponibile della SwapChain,
-	// e mette SIGNALED il relativo semaforo 'm_imageAvailable' per avvisare
-	// che l'immagine è pronta ad essere utilizzata.
-	uint32_t imageIndex;
+	uint32_t image_idx;
 	VkResult result = vkAcquireNextImageKHR(m_MainDevice.LogicalDevice, m_SwapChain.GetSwapChain(),
-						  std::numeric_limits<uint64_t>::max(),
-					      m_SyncObjects[m_CurrentFrame].ImageAvailable, VK_NULL_HANDLE, &imageIndex);
-
+						std::numeric_limits<uint64_t>::max(),
+					    m_SyncObjects[m_CurrentFrame].ImageAvailable, VK_NULL_HANDLE, &image_idx);
 	
 	m_CommandHandler.RecordCommands(
-		draw_data, imageIndex, m_SwapChain.GetExtent(),
-		m_SwapChain.GetFrameBuffers(), m_MeshList, m_MeshModelList, m_TextureObjects, 
+		draw_data, image_idx, m_SwapChain.GetExtent(),
+		m_SwapChain.GetFrameBuffers(),
+		m_Descriptors.GetLightDescriptorSets(),
+		m_Descriptors.GetInputDescriptorSets());
+
+	m_OffScreenCommandHandler.RecordOffScreenCommands(
+		draw_data, image_idx, m_SwapChain.GetExtent(), m_OffScreenFrameBuffer,
+		m_MeshList, m_MeshModelList, m_TextureObjects, 
 		m_Descriptors.GetDescriptorSets(),
 		m_Descriptors.GetInputDescriptorSets(),
-		m_Descriptors.GetLightDescriptorSets());
-	
-	UpdateUniformBuffersWithData(imageIndex);
+		m_PositionBufferImages, m_ColorBufferImages, m_NormalBufferImages, m_QueueFamilyIndices);
+		
+	UpdateUniformBuffersWithData(image_idx);
 
 	// Stages dove aspettare che il semaforo sia SIGNALED (all'output del final color)
-	VkPipelineStageFlags waitStages[] = {
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT	
+	VkPipelineStageFlags waitStages[] =
+	{
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
 	};
 	
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType				= VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.waitSemaphoreCount	= 1;														
+	submitInfo.pWaitSemaphores		= &m_SyncObjects[m_CurrentFrame].ImageAvailable;			
+	submitInfo.pWaitDstStageMask	= waitStages;												
+	submitInfo.commandBufferCount	= 1;														
+	submitInfo.pCommandBuffers		= &m_OffScreenCommandHandler.GetCommandBuffer(image_idx);  
+	submitInfo.signalSemaphoreCount = 1;														
+	submitInfo.pSignalSemaphores	= &m_SyncObjects[m_CurrentFrame].OffScreenAvailable;		
+
+	result = vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
 	
-	submitInfo.waitSemaphoreCount	= 1;											  // Numero dei semafori da aspettare
-	submitInfo.pWaitSemaphores		= &m_SyncObjects[m_CurrentFrame].ImageAvailable;  // Semaforo di disponibilità dell'immagine (aspetta che sia SIGNALED)
-	submitInfo.pWaitDstStageMask	= waitStages;									  // Stage dove iniziare la semaphore wait (output del final color, termine della pipeline)
-	submitInfo.commandBufferCount	= 1;											  // Numero di Command Buffer da inviare alla Queue
-	submitInfo.pCommandBuffers		= &m_CommandHandler.GetCommandBuffer(imageIndex); // Il Command Buffer da inviare non è quello corrente, ma è quello dell'immagine disponile
-	submitInfo.signalSemaphoreCount = 1;											  // Numero di semafori a cui segnalare na volta che il CommandBuffer ha terminato
-	submitInfo.pSignalSemaphores	= &m_SyncObjects[m_CurrentFrame].RenderFinished;  // Semaforo di fine Rendering (verrà messo a SIGNALED)
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to submit Command Buffer to Queue!");
+	}
 
+	// Submit light calculation pipeline
+	submitInfo.pWaitSemaphores		= &m_SyncObjects[m_CurrentFrame].OffScreenAvailable;
+	submitInfo.pCommandBuffers		= &m_CommandHandler.GetCommandBuffer(image_idx);
+	submitInfo.pSignalSemaphores	= &m_SyncObjects[m_CurrentFrame].RenderFinished;
 
-	// L'operazione di submit del CommandBuffer alla Queue accade se prima del termine della Pipeline
-	// è presente una nuova immagine disponibile, cosa garantita trammite una semaphore wait su 'm_imageAvailable' 
-	// posizionata proprio prima dell'output stage della Pipeline.
-	// Una volta che l'immagine sarà disponibile verranno eseguite le operazioni del CommandBuffer 
-	// sulla nuova immagine disponibile. Al termine delle operazioni del CommandBuffer il nuovo render sarà pronto
-	// e verrà avvisato con il semaforo 'm_renderFinished'.
-	// Inoltre al termine del render verrà anche avvisato il Fence, per dire che è possibile effettuare
-	// l'operazione di drawing a schermo
 	result = vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_SyncObjects[m_CurrentFrame].InFlight);
-	
+
 	if (result != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to submit Command Buffer to Queue!");
@@ -167,15 +209,12 @@ void VulkanRenderer::Draw(ImDrawData *draw_data)
 	// Presentazione dell'immagine a schermo
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType			   = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.waitSemaphoreCount = 1;												// Numero di semafori da aspettare prima di renderizzare
-	presentInfo.pWaitSemaphores	   = &m_SyncObjects[m_CurrentFrame].RenderFinished; // Aspetta che il rendering dell'immagine sia terminato
-	presentInfo.swapchainCount	   = 1;												// Numero di swapchains a cui presentare
-	presentInfo.pSwapchains		   = m_SwapChain.GetSwapChainData();	 			// Swapchain contenente le immagini
-	presentInfo.pImageIndices	   = &imageIndex;									// Indice dell'immagine nella SwapChain da visualizzare (quella nuova pescata dalle immagini disponibili)
+	presentInfo.waitSemaphoreCount = 1;												
+	presentInfo.pWaitSemaphores	   = &m_SyncObjects[m_CurrentFrame].RenderFinished; 
+	presentInfo.swapchainCount	   = 1;												
+	presentInfo.pSwapchains		   = m_SwapChain.GetSwapChainData();	 			
+	presentInfo.pImageIndices	   = &image_idx;									
 
-	// Prima di effettuare l'operazione di presentazione dell'immagine a schermo si deve assicurare
-	// che il render della nuova immagine sia pronto, cosa che viene assicurata dal semaforo 'm_renderFinished' del frame corrente.
-	// Allora visto che l'immagine è ufficialmente pronta verrà mostrata a schermo
 	result = vkQueuePresentKHR(m_PresentationQueue, &presentInfo);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR)
@@ -184,7 +223,9 @@ void VulkanRenderer::Draw(ImDrawData *draw_data)
 		return;
 	}
 	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+	{
 		throw std::runtime_error("Failed to present the image!");
+	}
 
 	m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
@@ -216,10 +257,15 @@ void VulkanRenderer::HandleMinimization()
 
 	m_GraphicPipeline.CreateGraphicPipeline();
 
+	m_PositionBufferImages.resize(m_SwapChain.SwapChainImagesSize());
 	m_ColorBufferImages.resize(m_SwapChain.SwapChainImagesSize());
+	m_NormalBufferImages.resize(m_SwapChain.SwapChainImagesSize());
+
 	for (size_t i = 0; i < m_ColorBufferImages.size(); i++)
 	{
-		Utility::CreateColorBufferImage(m_ColorBufferImages[i], m_SwapChain.GetExtent());
+		Utility::CreatePositionBufferImage(m_PositionBufferImages[i], m_SwapChain.GetExtent());
+		Utility::CreatePositionBufferImage(m_ColorBufferImages[i], m_SwapChain.GetExtent());
+		Utility::CreatePositionBufferImage(m_NormalBufferImages[i], m_SwapChain.GetExtent());
 	}
 
 	Utility::CreateDepthBufferImage(m_DepthBufferImage, m_SwapChain.GetExtent());
@@ -313,8 +359,6 @@ void VulkanRenderer::CreateMeshModel(const std::string& file)
 
 	// Caricamento delle texture (materials della scena)
 	std::vector<std::string> texture_names = MeshModel::LoadMaterials(scene);
-
-
 
 	// Mapping degli ID texture con gli ID dei descirptor 
 	std::vector<int> mat_to_tex(texture_names.size());
@@ -539,11 +583,15 @@ void VulkanRenderer::CreateSynchronizationObjects()
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 	{
-		VkResult image_available_sem = vkCreateSemaphore(m_MainDevice.LogicalDevice, &semaphore_info, nullptr, &m_SyncObjects[i].ImageAvailable);
-		VkResult render_finished_sem = vkCreateSemaphore(m_MainDevice.LogicalDevice, &semaphore_info, nullptr, &m_SyncObjects[i].RenderFinished);
-		VkResult in_flight_fence	 = vkCreateFence(m_MainDevice.LogicalDevice, &fence_info, nullptr, &m_SyncObjects[i].InFlight);
+		VkResult offscreen_available_sem = vkCreateSemaphore(m_MainDevice.LogicalDevice, &semaphore_info, nullptr, &m_SyncObjects[i].OffScreenAvailable);
+		VkResult image_available_sem	 = vkCreateSemaphore(m_MainDevice.LogicalDevice, &semaphore_info, nullptr, &m_SyncObjects[i].ImageAvailable);
+		VkResult render_finished_sem	 = vkCreateSemaphore(m_MainDevice.LogicalDevice, &semaphore_info, nullptr, &m_SyncObjects[i].RenderFinished);
+		VkResult in_flight_fence		 = vkCreateFence(m_MainDevice.LogicalDevice, &fence_info, nullptr, &m_SyncObjects[i].InFlight);
 
-		if (image_available_sem != VK_SUCCESS || render_finished_sem != VK_SUCCESS || in_flight_fence != VK_SUCCESS)
+		if (offscreen_available_sem != VK_SUCCESS || 
+			image_available_sem		!= VK_SUCCESS ||
+			render_finished_sem		!= VK_SUCCESS ||
+			in_flight_fence			!= VK_SUCCESS)
 			throw std::runtime_error("Failed to create semaphores and/or Fence!");
 	}
 }
@@ -564,9 +612,16 @@ void VulkanRenderer::SetUniformDataStructures()
 	m_ViewProjectionData.projection[1][1]	= m_ViewProjectionData.projection[1][1] * -1.0f;
 
 	// Lights
-	Light l = Light(1.0f, 0.0f, 0.0f, 1.0f);
+	Light l1 = Light(1.0f, 0.0f, 0.0f, 1.0f);
+	l1.SetLightPosition(glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+	Light l2 = Light(0.0f, 1.0f, 0.0f, 1.0f);
+	l2.SetLightPosition(glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
+	Light l3 = Light(0.0f, 0.0f, 1.0f, 1.0f);
+	l3.SetLightPosition(glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
 
-	m_LightData = l.GetUBOData();
+	m_LightData[0] = l1.GetUBOData();
+	m_LightData[1] = l2.GetUBOData();
+	m_LightData[2] = l3.GetUBOData();
 }
 
 void VulkanRenderer::CreateUniformBuffers()
@@ -615,8 +670,9 @@ void VulkanRenderer::UpdateUniformBuffersWithData(uint32_t imageIndex)
 	vkUnmapMemory(m_MainDevice.LogicalDevice, m_ViewProjectionUBOMemory[imageIndex]);
 
 	void* light_data;
-	vkMapMemory(m_MainDevice.LogicalDevice, m_LightUBOMemory[imageIndex], 0, sizeof(LightData), 0, &light_data);
-	memcpy(light_data, &m_LightData, sizeof(LightData));
+	auto light_data_size = m_LightData.size() * sizeof(LightData);
+	vkMapMemory(m_MainDevice.LogicalDevice, m_LightUBOMemory[imageIndex], 0, light_data_size, 0, &light_data);
+	memcpy(light_data, m_LightData.data(), light_data_size);
 	vkUnmapMemory(m_MainDevice.LogicalDevice, m_LightUBOMemory[imageIndex]);
 }
 
@@ -654,7 +710,9 @@ void VulkanRenderer::Cleanup()
 	m_Descriptors.DestroyInputAttachmentsLayout();
 	for (size_t i = 0; i < m_ColorBufferImages.size(); i++)
 	{
+		m_PositionBufferImages[i].DestroyAndFree(m_MainDevice);
 		m_ColorBufferImages[i].DestroyAndFree(m_MainDevice);
+		m_NormalBufferImages[i].DestroyAndFree(m_MainDevice);
 	}
 
 	m_DepthBufferImage.DestroyAndFree(m_MainDevice);
@@ -686,10 +744,15 @@ void VulkanRenderer::Cleanup()
 	{
 		vkDestroySemaphore(m_MainDevice.LogicalDevice, m_SyncObjects[i].RenderFinished, nullptr);
 		vkDestroySemaphore(m_MainDevice.LogicalDevice, m_SyncObjects[i].ImageAvailable, nullptr);
+		vkDestroySemaphore(m_MainDevice.LogicalDevice, m_SyncObjects[i].OffScreenAvailable, nullptr);
 		vkDestroyFence(m_MainDevice.LogicalDevice, m_SyncObjects[i].InFlight, nullptr);
 	}
 
+	m_OffScreenCommandHandler.DestroyCommandPool();
 	m_CommandHandler.DestroyCommandPool();
+
+	for (auto framebuffer : m_OffScreenFrameBuffer)
+		vkDestroyFramebuffer(m_MainDevice.LogicalDevice, framebuffer, nullptr);
 	m_SwapChain.DestroyFrameBuffers();
 
 	m_GraphicPipeline.DestroyPipeline();

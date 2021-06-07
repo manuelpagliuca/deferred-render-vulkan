@@ -20,6 +20,7 @@
 #include "MeshModel.h"
 #include "Light.h"
 
+constexpr std::size_t NUM_LIGHTS = 3;
 
 class VulkanRenderer
 {
@@ -44,6 +45,7 @@ private:
 	RenderPassHandler	m_RenderPassHandler;
 	GraphicPipeline		m_GraphicPipeline;
 	CommandHandler		m_CommandHandler;
+	CommandHandler		m_OffScreenCommandHandler;
 	Descriptors			m_Descriptors;
 
 	const std::vector<const char*> m_RequestedDeviceExtensions =
@@ -58,8 +60,12 @@ private:
 	VkQueue	m_GraphicsQueue;							
 	VkQueue	m_PresentationQueue;						
 
+	std::vector<BufferImage> m_PositionBufferImages;
 	std::vector<BufferImage> m_ColorBufferImages;
+	std::vector<BufferImage> m_NormalBufferImages;
 	BufferImage m_DepthBufferImage;
+
+	std::vector<VkFramebuffer>			m_OffScreenFrameBuffer;
 	
 	std::vector<VkBuffer>		 m_ViewProjectionUBO;
 	std::vector<VkDeviceMemory>  m_ViewProjectionUBOMemory;
@@ -67,7 +73,7 @@ private:
 
 	std::vector<VkBuffer>		 m_LightUBO;
 	std::vector<VkDeviceMemory>	 m_LightUBOMemory;
-	LightData					 m_LightData;
+	std::array<LightData, NUM_LIGHTS>		 m_LightData;
 
 	//std::vector<VkBuffer>		 m_modelDynamicUBO;						
 	//std::vector<VkDeviceMemory>  m_modelDynamicUniformBufferMemory;		
@@ -81,6 +87,8 @@ private:
 	std::vector<MeshModel> m_MeshModelList;
 
 private:
+	void CreateOffScreenFrameBuffer();
+
 	/* Core Renderer Functions */
 	void CreateKernel();
 	void CreateInstance();													

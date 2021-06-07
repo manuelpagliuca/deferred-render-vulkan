@@ -82,19 +82,25 @@ void Descriptors::CreateTextureSetLayout()
 
 void Descriptors::CreateInputSetLayout()
 {
+	VkDescriptorSetLayoutBinding positionInputLayoutBinding = {};
+	positionInputLayoutBinding.binding			= 0;
+	positionInputLayoutBinding.descriptorType	= VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	positionInputLayoutBinding.descriptorCount	= 1;
+	positionInputLayoutBinding.stageFlags		= VK_SHADER_STAGE_FRAGMENT_BIT;
+
 	VkDescriptorSetLayoutBinding colourInputLayoutBinding = {};
-	colourInputLayoutBinding.binding			= 0;
-	colourInputLayoutBinding.descriptorType		= VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+	colourInputLayoutBinding.binding			= 1;
+	colourInputLayoutBinding.descriptorType		= VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	colourInputLayoutBinding.descriptorCount	= 1;
 	colourInputLayoutBinding.stageFlags			= VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	VkDescriptorSetLayoutBinding depthInputLayoutBinding = {};
-	depthInputLayoutBinding.binding				= 1;
-	depthInputLayoutBinding.descriptorType		= VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-	depthInputLayoutBinding.descriptorCount		= 1;
-	depthInputLayoutBinding.stageFlags			= VK_SHADER_STAGE_FRAGMENT_BIT;
+	VkDescriptorSetLayoutBinding normalInputLayoutBinding = {};
+	normalInputLayoutBinding.binding			= 2;
+	normalInputLayoutBinding.descriptorType		= VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	normalInputLayoutBinding.descriptorCount	= 1;
+	normalInputLayoutBinding.stageFlags			= VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	std::vector<VkDescriptorSetLayoutBinding> inputBindings = { colourInputLayoutBinding, depthInputLayoutBinding };
+	std::vector<VkDescriptorSetLayoutBinding> inputBindings = { positionInputLayoutBinding, colourInputLayoutBinding, normalInputLayoutBinding };
 
 	VkDescriptorSetLayoutCreateInfo inputLayoutCreateInfo = {};
 	inputLayoutCreateInfo.sType			= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -175,7 +181,8 @@ void Descriptors::CreateViewProjectionDescriptorSets(
 	}
 }
 
-void Descriptors::CreateInputAttachmentsDescriptorSets(size_t swapchain_size, const std::vector<BufferImage>& color_buffer, const BufferImage& depth_buffer)
+void Descriptors::CreateInputAttachmentsDescriptorSets(size_t swapchain_size, const std::vector<BufferImage>& position_buffer,
+	const std::vector<BufferImage>& color_buffer, const std::vector<BufferImage>& normal_buffer)
 {
 	m_InputDescriptorSets.resize(swapchain_size);
 
@@ -195,35 +202,49 @@ void Descriptors::CreateInputAttachmentsDescriptorSets(size_t swapchain_size, co
 
 	for (size_t i = 0; i < swapchain_size; i++)
 	{
-		VkDescriptorImageInfo colourAttachmentDescriptor = {};
-		colourAttachmentDescriptor.imageLayout	= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		colourAttachmentDescriptor.imageView	= color_buffer[i].ImageView;
-		colourAttachmentDescriptor.sampler		= VK_NULL_HANDLE;
+		VkDescriptorImageInfo positionImageInfo = {};
+		positionImageInfo.imageLayout	= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		positionImageInfo.imageView		= position_buffer[i].ImageView;
+		positionImageInfo.sampler		= position_buffer[i].Sampler;
+
+		VkDescriptorImageInfo colourImageInfo = {};
+		colourImageInfo.imageLayout		= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		colourImageInfo.imageView		= color_buffer[i].ImageView;
+		colourImageInfo.sampler			= color_buffer[i].Sampler;
+
+		VkDescriptorImageInfo normalImageInfo = {};
+		normalImageInfo.imageLayout		= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		normalImageInfo.imageView		= normal_buffer[i].ImageView;
+		normalImageInfo.sampler			= normal_buffer[i].Sampler;
+
+		VkWriteDescriptorSet positionWrite = {};
+		positionWrite.sType				= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		positionWrite.dstSet			= m_InputDescriptorSets[i];
+		positionWrite.dstBinding		= 0;
+		positionWrite.dstArrayElement	= 0;
+		positionWrite.descriptorType	= VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		positionWrite.descriptorCount	= 1;
+		positionWrite.pImageInfo		= &positionImageInfo;
 
 		VkWriteDescriptorSet colourWrite = {};
-		colourWrite.sType			= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		colourWrite.dstSet			= m_InputDescriptorSets[i];
-		colourWrite.dstBinding		= 0;
-		colourWrite.dstArrayElement = 0;
-		colourWrite.descriptorType	= VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-		colourWrite.descriptorCount = 1;
-		colourWrite.pImageInfo		= &colourAttachmentDescriptor;
+		colourWrite.sType				= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		colourWrite.dstSet				= m_InputDescriptorSets[i];
+		colourWrite.dstBinding			= 1;
+		colourWrite.dstArrayElement		= 0;
+		colourWrite.descriptorType		= VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		colourWrite.descriptorCount		= 1;
+		colourWrite.pImageInfo			= &colourImageInfo;
 
-		VkDescriptorImageInfo depthAttachmentDescriptor = {};
-		depthAttachmentDescriptor.imageLayout	= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		depthAttachmentDescriptor.imageView		= depth_buffer.ImageView;
-		depthAttachmentDescriptor.sampler		= VK_NULL_HANDLE;
+		VkWriteDescriptorSet normalWrite = {};
+		normalWrite.sType				= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		normalWrite.dstSet				= m_InputDescriptorSets[i];
+		normalWrite.dstBinding			= 2;
+		normalWrite.dstArrayElement		= 0;
+		normalWrite.descriptorType		= VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		normalWrite.descriptorCount		= 1;
+		normalWrite.pImageInfo			= &normalImageInfo;
 
-		VkWriteDescriptorSet depthWrite = {};
-		depthWrite.sType			= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		depthWrite.dstSet			= m_InputDescriptorSets[i];
-		depthWrite.dstBinding		= 1;
-		depthWrite.dstArrayElement	= 0;
-		depthWrite.descriptorType	= VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-		depthWrite.descriptorCount	= 1;
-		depthWrite.pImageInfo		= &depthAttachmentDescriptor;
-
-		std::vector<VkWriteDescriptorSet> setWrites = { colourWrite, depthWrite };
+		std::vector<VkWriteDescriptorSet> setWrites = { positionWrite, colourWrite, normalWrite };
 
 		vkUpdateDescriptorSets(*m_Device, static_cast<uint32_t>(setWrites.size()), setWrites.data(), 0, nullptr);
 	}
@@ -260,7 +281,7 @@ void Descriptors::CreateLightDescriptorSets(const std::vector<VkBuffer>& ubo_lig
 		light_set_write.dstSet			= m_LightDescriptorSets[i];
 		light_set_write.dstBinding		= 0;									
 		light_set_write.dstArrayElement	= 0;									
-		light_set_write.descriptorType	= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;	
+		light_set_write.descriptorType	= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		light_set_write.descriptorCount	= 1;									
 		light_set_write.pBufferInfo		= &light_buffer_info;					
 
@@ -441,15 +462,19 @@ void Descriptors::CreateImguiPool()
 
 void Descriptors::CreateInputAttachmentsPool(size_t numOfSwapImgs)
 {
+	VkDescriptorPoolSize position_pool_size = {};
+	position_pool_size.type				= VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	position_pool_size.descriptorCount	= static_cast<uint32_t>(numOfSwapImgs);
+
 	VkDescriptorPoolSize color_pool_size = {};
-	color_pool_size.type			= VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+	color_pool_size.type			= VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	color_pool_size.descriptorCount = static_cast<uint32_t>(numOfSwapImgs);
 
-	VkDescriptorPoolSize depth_pool_size = {};
-	depth_pool_size.type				= VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-	depth_pool_size.descriptorCount		= static_cast<uint32_t>(numOfSwapImgs);
+	VkDescriptorPoolSize normal_pool_size = {};
+	normal_pool_size.type				= VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	normal_pool_size.descriptorCount	= static_cast<uint32_t>(numOfSwapImgs);
 
-	std::vector<VkDescriptorPoolSize> pool_sizes = { color_pool_size, depth_pool_size };
+	std::vector<VkDescriptorPoolSize> pool_sizes = { position_pool_size, color_pool_size, normal_pool_size };
 
 	VkDescriptorPoolCreateInfo pool_create_info = {};
 	pool_create_info.sType			= VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -467,7 +492,7 @@ void Descriptors::CreateInputAttachmentsPool(size_t numOfSwapImgs)
 void Descriptors::CreateLightPool(size_t swapchain_images, size_t ubo_size)
 {
 	VkDescriptorPoolSize light_pool_size = {};
-	light_pool_size.type			= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;	
+	light_pool_size.type			= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	light_pool_size.descriptorCount = static_cast<uint32_t> (ubo_size); 
 
 	std::vector<VkDescriptorPoolSize> pool_sizes = { light_pool_size };
