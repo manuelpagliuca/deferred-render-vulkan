@@ -478,7 +478,7 @@ void Descriptors::CreateInputAttachmentsPool(size_t numOfSwapImgs)
 
 	VkDescriptorPoolCreateInfo pool_create_info = {};
 	pool_create_info.sType			= VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	pool_create_info.maxSets		= numOfSwapImgs;
+	pool_create_info.maxSets		= static_cast<uint32_t>(numOfSwapImgs);
 	pool_create_info.poolSizeCount	= static_cast<uint32_t>(pool_sizes.size());
 	pool_create_info.pPoolSizes		= pool_sizes.data();
 

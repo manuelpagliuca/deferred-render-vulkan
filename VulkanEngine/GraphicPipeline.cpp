@@ -3,16 +3,16 @@
 
 GraphicPipeline::GraphicPipeline()
 {
-	m_MainDevice	    = {};
-	m_FirstPipeline  = 0;
+	m_MainDevice			= {};
+	m_FirstPipeline			= 0;
 	m_FirstPipelineLayout	= 0;
-	m_RenderPassHandler = new RenderPassHandler();
+	m_RenderPassHandler		= new RenderPassHandler();
 }
 
 GraphicPipeline::GraphicPipeline(MainDevice* main_device, SwapChain* swap_chain, RenderPassHandler* render_pass_handler)
 {
-	m_MainDevice = main_device;
-	m_SwapChain = swap_chain;
+	m_MainDevice		= main_device;
+	m_SwapChain			= swap_chain;
 	m_RenderPassHandler = render_pass_handler;
 }
 
@@ -218,7 +218,6 @@ void GraphicPipeline::CreateGraphicPipeline()
 
 	rasterizerCreateInfo.cullMode							= VK_CULL_MODE_FRONT_BIT;
 	rasterizerCreateInfo.frontFace							= VK_FRONT_FACE_COUNTER_CLOCKWISE;
-
 
 	depth_stencil_info.depthWriteEnable						= VK_FALSE;
 

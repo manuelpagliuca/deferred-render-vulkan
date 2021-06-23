@@ -152,7 +152,8 @@ void VulkanRenderer::Draw(ImDrawData *draw_data)
 	vkResetFences(m_MainDevice.LogicalDevice, 1, &m_SyncObjects[m_CurrentFrame].InFlight); // InFlight messo ad UNSIGNALED
 	
 	uint32_t image_idx;
-	VkResult result = vkAcquireNextImageKHR(m_MainDevice.LogicalDevice, m_SwapChain.GetSwapChain(),
+	VkResult result = vkAcquireNextImageKHR(
+						m_MainDevice.LogicalDevice, m_SwapChain.GetSwapChain(),
 						std::numeric_limits<uint64_t>::max(),
 					    m_SyncObjects[m_CurrentFrame].ImageAvailable, VK_NULL_HANDLE, &image_idx);
 	

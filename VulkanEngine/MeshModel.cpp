@@ -61,7 +61,7 @@ std::vector<std::string> MeshModel::LoadMaterials(const aiScene* scene)
 			if (material->GetTexture(aiTextureType_DIFFUSE, 0, &path) == AI_SUCCESS)
 			{
 				// Eliminazione delle relative paths
-				const int idx = std::string(path.data).rfind("\\");
+				size_t idx = std::string(path.data).rfind("\\");
 				std::string file_name = std::string(path.data).substr(idx + 1);
 				texture_list[i] = file_name;
 			}

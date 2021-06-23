@@ -31,7 +31,7 @@ int main(void)
 {
 	GLFWwindow* window = nullptr;
 
-	InitWindow(&window, "Test Vulkan 13/03/2021", 1400, 1050); 
+	InitWindow(&window, "Test Vulkan 13/03/2021", 980, 740); 
 
 	if (vulkanRenderer->Init(window) == EXIT_FAILURE)
 		return EXIT_FAILURE;
@@ -63,7 +63,7 @@ int main(void)
 		firstModel	= glm::translate(firstModel, glm::vec3(0.0f, -0.5f, 0.f));
 		firstModel	= glm::scale(firstModel, 0.4f * glm::vec3(1.0f, 1.0f, 1.0f));
 		firstModel	= glm::rotate(firstModel, glm::radians(angle), glm::vec3(0.0f, 1.0f, 0.0f));
-
+		
 		secondModel = glm::translate(secondModel, glm::vec3(-1.0f, -0.5f, 0.0f));
 		secondModel = glm::scale(secondModel, 0.4f * glm::vec3(1.0f, 1.0f, 1.0f));
 		secondModel = glm::rotate(secondModel, glm::radians(angle), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -71,7 +71,7 @@ int main(void)
 		thirdModel = glm::translate(thirdModel, glm::vec3(1.0f, -0.5f, 0.0f));
 		thirdModel = glm::scale(thirdModel, 0.4f * glm::vec3(1.0f, 1.0f, 1.0f));
 		thirdModel = glm::rotate(thirdModel, glm::radians(angle), glm::vec3(0.0f, 1.0f, 0.0f));
-
+		
 		vulkanRenderer->UpdateModel(0, firstModel);
 		vulkanRenderer->UpdateModel(1, secondModel);
 		vulkanRenderer->UpdateModel(2, thirdModel);
