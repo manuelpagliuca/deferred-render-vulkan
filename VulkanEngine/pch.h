@@ -25,7 +25,7 @@
 #include <glm/gtc/matrix_transform.hpp> 
 
 // STB IMAGE
-#include <stb_image.h>
+#include <stb/stb_image.h>
 
 // DEAR IMGUI
 #include "imgui_impl_vulkan.h"

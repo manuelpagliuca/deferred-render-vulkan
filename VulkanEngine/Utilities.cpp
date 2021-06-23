@@ -2,7 +2,7 @@
 
 #include "Utilities.h"
 #define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+#include <stb/stb_image.h>
 
 MainDevice*		Utility::m_MainDevice		= nullptr;
 VkSurfaceKHR*	Utility::m_Surface			= nullptr;
