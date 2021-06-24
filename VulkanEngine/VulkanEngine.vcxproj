@@ -91,6 +91,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Camera.cpp" />
     <ClCompile Include="CommandHandler.cpp" />
     <ClCompile Include="Cube.cpp" />
     <ClCompile Include="DebugMessanger.cpp" />
@@ -119,8 +120,10 @@
     <ClCompile Include="TextureLoader.cpp" />
     <ClCompile Include="Utilities.cpp" />
     <ClCompile Include="VulkanRenderer.cpp" />
+    <ClCompile Include="Window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Camera.h" />
     <ClInclude Include="CommandHandler.h" />
     <ClInclude Include="DataStructures.h" />
     <ClInclude Include="DebugMessanger.h" />
@@ -147,6 +150,7 @@
     <ClInclude Include="Utilities.h" />
     <ClInclude Include="VulkanRenderer.h" />
     <ClInclude Include="VulkanValidation.h" />
+    <ClInclude Include="Window.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="assimp-vc142-mt.dll" />

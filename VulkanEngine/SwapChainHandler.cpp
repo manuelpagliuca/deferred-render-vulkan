@@ -8,7 +8,6 @@ SwapChain::SwapChain()
 	m_VulkanSurface			= 0;
 	m_SwapChainExtent		= {};
 	m_SwapChainImageFormat	= {};
-	m_GLFWwindow			= nullptr;
 }
 	
 SwapChain::SwapChain(MainDevice *mainDevice, VkSurfaceKHR *surface,

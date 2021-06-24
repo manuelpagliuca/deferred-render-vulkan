@@ -1,56 +1,47 @@
 #include "pch.h"
 
+#include "Window.h"
 #include "GUI.h"
-
 #include "VulkanRenderer.h"
+#include "Camera.h"
 
 static VulkanRenderer* vulkanRenderer = new VulkanRenderer();
 
-void InitWindow(GLFWwindow** t_window, std::string wName = "Test Window", const int width = 800, const int height = 600)
-{
-	int res = glfwInit();
-
-	if (!glfwVulkanSupported())
-	{
-		std::cerr << "GLFW: Vulkan not supported\n" << std::endl;
-		return;
-	}
-
-	if (!res)
-	{
-		throw std::runtime_error("Unable to initialize GLFW.");
-	}
-		
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // Impostare GLFW in modo che non lavori con OpenGL
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);	  // Disabilito la resize (va gestita in un suo modo specifico su Vulkan)
-
-	*t_window = glfwCreateWindow(width, height, wName.c_str(), nullptr, nullptr);
-}
-
 int main(void)
 {
-	GLFWwindow* window = nullptr;
+	Window window(800, 600, "Vulkan | Deferred Render");
 
-	InitWindow(&window, "Test Vulkan 13/03/2021", 980, 740); 
+	if (window.Initialise() == -1)
+	{
+		return EXIT_FAILURE;
+	}
 
-	if (vulkanRenderer->Init(window) == EXIT_FAILURE)
+	glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 0.0f);		// Vector in world space that points to camera position
+	glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);			// Vector in world space, parallel to the y axis
+	Camera camera = Camera(cameraPosition, worldUp, -60.0f, 0.0f, 5.0f, 0.5f);
+
+	if (vulkanRenderer->Init(window.getWindow()) == EXIT_FAILURE)
 		return EXIT_FAILURE;
 
 	float angle		= 0.0f;
 	float deltaTime = 0.0f;
 	float lastTime  = 0.0f;
 	
-	GUI::GetInstance()->SetRenderData(vulkanRenderer->GetRenderData(), window);
+	GUI::GetInstance()->SetRenderData(vulkanRenderer->GetRenderData(), window.getWindow());
 	GUI::GetInstance()->Init();
 	GUI::GetInstance()->LoadFontsToGPU();
 
-	while (!glfwWindowShouldClose(window))
+	while (!glfwWindowShouldClose(window.getWindow()))
 	{
 		glfwPollEvents();
 		
 		float const now = static_cast<float const>(glfwGetTime());
 		deltaTime		= now - lastTime;
 		lastTime		= now;
+
+		camera.keyControl(window.getsKeys(), deltaTime);
+		camera.mouseControl(window.getXChange(), window.getYChange());
+
 
 		angle += 1.0f * deltaTime*5.0f;
 		if (angle > 360.0f)
@@ -87,7 +78,7 @@ int main(void)
 
 	vulkanRenderer->Cleanup();
 
-	glfwDestroyWindow(window);
+	glfwDestroyWindow(window.getWindow());
 	glfwTerminate();
 
 	return 0;

@@ -147,7 +147,7 @@ void VulkanRenderer::UpdateModel(int modelID, glm::mat4 newModel)
 
 void VulkanRenderer::Draw(ImDrawData *draw_data)
 {
-	vkWaitForFences(m_MainDevice.LogicalDevice, 1, &m_SyncObjects[m_CurrentFrame].InFlight, VK_TRUE, std::numeric_limits<uint64_t>::max()); // Aspetto che l'ultimo draw venga effettuato
+	vkWaitForFences(m_MainDevice.LogicalDevice, 1, &m_SyncObjects[m_CurrentFrame].InFlight, VK_TRUE, std::numeric_limits<uint64_t>::max());
 
 	vkResetFences(m_MainDevice.LogicalDevice, 1, &m_SyncObjects[m_CurrentFrame].InFlight); // InFlight messo ad UNSIGNALED
 	
@@ -157,19 +157,19 @@ void VulkanRenderer::Draw(ImDrawData *draw_data)
 						std::numeric_limits<uint64_t>::max(),
 					    m_SyncObjects[m_CurrentFrame].ImageAvailable, VK_NULL_HANDLE, &image_idx);
 	
+	m_OffScreenCommandHandler.RecordOffScreenCommands(
+		draw_data, image_idx, m_SwapChain.GetExtent(), m_OffScreenFrameBuffer,
+		m_MeshList, m_MeshModelList, m_TextureObjects,
+		m_Descriptors.GetDescriptorSets(),
+		m_Descriptors.GetInputDescriptorSets(),
+		m_PositionBufferImages, m_ColorBufferImages, m_NormalBufferImages, m_QueueFamilyIndices);
+
 	m_CommandHandler.RecordCommands(
 		draw_data, image_idx, m_SwapChain.GetExtent(),
 		m_SwapChain.GetFrameBuffers(),
 		m_Descriptors.GetLightDescriptorSets(),
 		m_Descriptors.GetInputDescriptorSets());
-
-	m_OffScreenCommandHandler.RecordOffScreenCommands(
-		draw_data, image_idx, m_SwapChain.GetExtent(), m_OffScreenFrameBuffer,
-		m_MeshList, m_MeshModelList, m_TextureObjects, 
-		m_Descriptors.GetDescriptorSets(),
-		m_Descriptors.GetInputDescriptorSets(),
-		m_PositionBufferImages, m_ColorBufferImages, m_NormalBufferImages, m_QueueFamilyIndices);
-		
+			
 	UpdateUniformBuffersWithData(image_idx);
 
 	// Stages dove aspettare che il semaforo sia SIGNALED (all'output del final color)
