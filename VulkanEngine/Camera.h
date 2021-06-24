@@ -4,6 +4,10 @@
 #include <GLM/gtc/matrix_transform.hpp>
 #include <GLFW/glfw3.h>
 
+struct CameraData {
+
+};
+
 class Camera
 {
 public:

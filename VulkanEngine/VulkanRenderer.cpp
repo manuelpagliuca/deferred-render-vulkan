@@ -23,15 +23,15 @@ VulkanRenderer::VulkanRenderer()
 	m_OffScreenCommandHandler	= CommandHandler(&m_MainDevice, &m_GraphicPipeline, &m_RenderPassHandler);
 }
 
-int VulkanRenderer::Init(void* t_window)
+int VulkanRenderer::Init(Window* window)
 {
-	if (!t_window)
+	m_Window = window;
+
+	if (!m_Window)
 	{
 		std::cerr << "Unable to transfer GLFW window" << std::endl;
 		return EXIT_FAILURE;
 	}
-
-	m_Window = static_cast<GLFWwindow*>(t_window);
 
 	try
 	{
@@ -49,6 +49,7 @@ int VulkanRenderer::Init(void* t_window)
 		VkDescriptorSetLayout tex_set_layout	= m_Descriptors.GetTextureSetLayout();
 		VkDescriptorSetLayout inp_set_layout	= m_Descriptors.GetInputSetLayout();
 		VkDescriptorSetLayout light_set_layout	= m_Descriptors.GetLightSetLayout();
+
 		m_GraphicPipeline.SetDescriptorSetLayouts(vp_set_layout, tex_set_layout, inp_set_layout, light_set_layout);
 
 		SetupPushCostantRange();
@@ -145,6 +146,11 @@ void VulkanRenderer::UpdateModel(int modelID, glm::mat4 newModel)
 	//m_MeshList[modelID].setModel(newModel);
 }
 
+void VulkanRenderer::UpdateCameraPosition(const glm::mat4& view_matrix)
+{
+	m_ViewProjectionData.view = view_matrix;
+}
+
 void VulkanRenderer::Draw(ImDrawData *draw_data)
 {
 	vkWaitForFences(m_MainDevice.LogicalDevice, 1, &m_SyncObjects[m_CurrentFrame].InFlight, VK_TRUE, std::numeric_limits<uint64_t>::max());
@@ -234,10 +240,10 @@ void VulkanRenderer::Draw(ImDrawData *draw_data)
 void VulkanRenderer::HandleMinimization()
 {
 	int width = 0, height = 0;
-	glfwGetFramebufferSize(m_Window, &width, &height);
+	glfwGetFramebufferSize(m_Window->getWindow(), &width, &height);
 
 	while (width == 0 || height == 0) {
-		glfwGetFramebufferSize(m_Window, &width, &height);
+		glfwGetFramebufferSize(m_Window->getWindow(), &width, &height);
 		glfwWaitEvents();
 	}
 
@@ -558,7 +564,7 @@ void VulkanRenderer::CreateLogicalDevice()
 
 void VulkanRenderer::CreateSurface()
 {
-	VkResult res = glfwCreateWindowSurface(m_VulkanInstance, m_Window, nullptr, &m_Surface);
+	VkResult res = glfwCreateWindowSurface(m_VulkanInstance, m_Window->getWindow(), nullptr, &m_Surface);
 																		
 	if (res != VK_SUCCESS)
 	{
@@ -609,8 +615,8 @@ void VulkanRenderer::SetUniformDataStructures()
 	// View-Projection
 	float const aspectRatio					= static_cast<float>(m_SwapChain.GetExtentWidth()) / static_cast<float>(m_SwapChain.GetExtentHeight());
 	m_ViewProjectionData.projection			= glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.f);
-	m_ViewProjectionData.view				= glm::lookAt(glm::vec3(0.f, 0.f, 3.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.0f, 0.f));
 	m_ViewProjectionData.projection[1][1]	= m_ViewProjectionData.projection[1][1] * -1.0f;
+	m_ViewProjectionData.view				= glm::lookAt(glm::vec3(0.f, 0.f, 3.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.0f, 0.f));
 
 	// Lights
 	Light l1 = Light(1.0f, 0.0f, 0.0f, 1.0f);

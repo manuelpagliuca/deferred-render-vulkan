@@ -11,7 +11,7 @@ SwapChain::SwapChain()
 }
 	
 SwapChain::SwapChain(MainDevice *mainDevice, VkSurfaceKHR *surface,
-	GLFWwindow *glfwWindow, QueueFamilyIndices &queueFamilyIndices)
+	Window *window, QueueFamilyIndices &queueFamilyIndices)
 {
 	m_Swapchain				= 0;
 	m_MainDevice			= mainDevice;
@@ -19,7 +19,8 @@ SwapChain::SwapChain(MainDevice *mainDevice, VkSurfaceKHR *surface,
 	m_VulkanSurface			= surface;
 	m_SwapChainExtent		= {};
 	m_SwapChainImageFormat	= {};
-	m_GLFWwindow			= glfwWindow;
+
+	m_Window				= window;
 }
 
 VkSwapchainKHR* SwapChain::GetSwapChainData()
@@ -91,7 +92,6 @@ size_t SwapChain::FrameBuffersSize() const
 void SwapChain::CleanUpSwapChain()
 {
 	DestroyFrameBuffers();
-
 	DestroySwapChainImageViews();
 	DestroySwapChain();
 }
@@ -335,7 +335,7 @@ VkExtent2D SwapChain::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& surfaceCa
 	{
 		int width;
 		int height;
-		glfwGetFramebufferSize(m_GLFWwindow, &width, &height);	// Si prelevano le dimensioni della finestra di GLFW
+		glfwGetFramebufferSize(m_Window->getWindow(), &width, &height);	// Si prelevano le dimensioni della finestra di GLFW
 															// Si crea una nuova Extent con le dimensioni corrette
 		VkExtent2D newExtent = {};
 		newExtent.width		= static_cast<uint32_t>(width);

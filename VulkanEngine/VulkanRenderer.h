@@ -2,6 +2,7 @@
 
 #include "pch.h"
 
+#include "Window.h"
 #include "Mesh.h"
 #include "Utilities.h"
 #include "DebugMessanger.h"
@@ -28,8 +29,9 @@ public:
 	VulkanRenderer();
 	~VulkanRenderer();
 
-	int Init(void* newWindow);
+	int Init(Window* window);
 	void UpdateModel(int modelID, glm::mat4 newModel);
+	void UpdateCameraPosition(const glm::mat4& view_matrix);
 	void Draw(ImDrawData * draw_data);
 	void Cleanup();
 
@@ -40,7 +42,7 @@ private:
 	VkInstance			m_VulkanInstance;
 	MainDevice			m_MainDevice;
 	VkSurfaceKHR		m_Surface;	
-	GLFWwindow*			m_Window = nullptr;
+	Window*				m_Window;
 	SwapChain			m_SwapChain;
 	RenderPassHandler	m_RenderPassHandler;
 	GraphicPipeline		m_GraphicPipeline;

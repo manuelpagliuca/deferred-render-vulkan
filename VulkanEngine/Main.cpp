@@ -20,7 +20,7 @@ int main(void)
 	glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);			// Vector in world space, parallel to the y axis
 	Camera camera = Camera(cameraPosition, worldUp, -60.0f, 0.0f, 5.0f, 0.5f);
 
-	if (vulkanRenderer->Init(window.getWindow()) == EXIT_FAILURE)
+	if (vulkanRenderer->Init(&window) == EXIT_FAILURE)
 		return EXIT_FAILURE;
 
 	float angle		= 0.0f;
@@ -66,6 +66,8 @@ int main(void)
 		vulkanRenderer->UpdateModel(0, firstModel);
 		vulkanRenderer->UpdateModel(1, secondModel);
 		vulkanRenderer->UpdateModel(2, thirdModel);
+
+		vulkanRenderer->UpdateCameraPosition(camera.calculateViewMatrix());
 
 		GUI::GetInstance()->Render();
 		auto draw_data = GUI::GetInstance()->GetDrawData();

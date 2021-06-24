@@ -2,6 +2,7 @@
 
 #include "pch.h"
 
+#include "Window.h"
 #include "Utilities.h"
 
 struct SwapChainImage {
@@ -20,7 +21,7 @@ class SwapChain
 public:
 	SwapChain();
 	SwapChain(MainDevice *main_device, VkSurfaceKHR *surface, 
-		GLFWwindow* glfwWindow, QueueFamilyIndices& queueFamilyIndices);
+		Window* window, QueueFamilyIndices& queueFamilyIndices);
 
 	/* Generic */
 	void CreateSwapChain();
@@ -59,7 +60,7 @@ private:
 	/* References of the renderer */
 	MainDevice			*m_MainDevice;
 	VkSurfaceKHR		*m_VulkanSurface;
-	GLFWwindow			*m_GLFWwindow;
+	Window				*m_Window;	
 	VkRenderPass		*m_RenderPass;
 
 	QueueFamilyIndices  m_QueueFamilyIndices;
