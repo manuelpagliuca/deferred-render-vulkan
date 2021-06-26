@@ -19,13 +19,14 @@ Descriptors::Descriptors(VkDevice *device)
 	m_Device = device;
 }
 
-void Descriptors::CreateDescriptorPools(size_t swapchain_images, size_t vp_ubo_size, size_t light_ubo_size)
+void Descriptors::CreateDescriptorPools(size_t swapchain_images, size_t vp_ubo_size, size_t light_ubo_size, size_t settings_ubo_size)
 {
 	CreateViewProjectionPool(swapchain_images, vp_ubo_size);
 	CreateTexturePool();
 	CreateImguiPool();
 	CreateInputAttachmentsPool(swapchain_images);
 	CreateLightPool(swapchain_images, light_ubo_size);
+	CreateSettingsPool(swapchain_images, settings_ubo_size);
 }
 
 void Descriptors::CreateSetLayouts()
@@ -34,6 +35,7 @@ void Descriptors::CreateSetLayouts()
 	CreateTextureSetLayout();
 	CreateInputSetLayout();
 	CreateLightSetLayout();
+	CreateSettingsSetLayout();
 }
 
 void Descriptors::CreateViewProjectionSetLayout()
@@ -136,6 +138,28 @@ void Descriptors::CreateLightSetLayout()
 
 	if (result != VK_SUCCESS)
 		throw std::runtime_error("Failed to create the Light Descriptor Set Layout");
+}
+
+void Descriptors::CreateSettingsSetLayout()
+{
+	VkDescriptorSetLayoutBinding settings_layout_binding = {};
+	settings_layout_binding.binding				= 0;
+	settings_layout_binding.descriptorType		= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	settings_layout_binding.descriptorCount		= 1;
+	settings_layout_binding.stageFlags			= VK_SHADER_STAGE_FRAGMENT_BIT;
+	settings_layout_binding.pImmutableSamplers	= nullptr;
+
+	std::vector<VkDescriptorSetLayoutBinding> layout_bindings = { settings_layout_binding };
+
+	VkDescriptorSetLayoutCreateInfo layout_info = {};
+	layout_info.sType							= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layout_info.bindingCount					= static_cast<uint32_t>(layout_bindings.size());
+	layout_info.pBindings						= layout_bindings.data();
+
+	VkResult result = vkCreateDescriptorSetLayout(*m_Device, &layout_info, nullptr, &m_SettingsLayout);
+
+	if (result != VK_SUCCESS)
+		throw std::runtime_error("Failed to create the Settings Descriptor Set Layout");
 }
 
 void Descriptors::CreateViewProjectionDescriptorSets(
@@ -291,6 +315,47 @@ void Descriptors::CreateLightDescriptorSets(const std::vector<VkBuffer>& ubo_lig
 	}
 }
 
+void Descriptors::CreateSettingsDescriptorSets(const std::vector<VkBuffer>& ubo_settings, size_t data_size, size_t swapchain_images)
+{
+	m_SettingsDescriptorSets.resize(swapchain_images);
+
+	std::vector<VkDescriptorSetLayout> desc_set_layouts(swapchain_images, m_SettingsLayout);
+
+	VkDescriptorSetAllocateInfo settings_allocate_info = {};
+	settings_allocate_info.sType					= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	settings_allocate_info.descriptorPool			= m_SettingsPool;
+	settings_allocate_info.descriptorSetCount		= static_cast<uint32_t>(swapchain_images);
+	settings_allocate_info.pSetLayouts				= desc_set_layouts.data();
+
+	VkResult result = vkAllocateDescriptorSets(*m_Device, &settings_allocate_info, m_SettingsDescriptorSets.data());
+
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to allocate Settings Attachment Descriptor Sets!");
+	}
+
+	for (size_t i = 0; i < swapchain_images; i++)
+	{
+		VkDescriptorBufferInfo settings_buffer_info = {};
+		settings_buffer_info.buffer = ubo_settings[i];
+		settings_buffer_info.offset = 0;
+		settings_buffer_info.range	= data_size;
+
+		VkWriteDescriptorSet settings_set_write = {};
+		settings_set_write.sType			= VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		settings_set_write.dstSet			= m_SettingsDescriptorSets[i];
+		settings_set_write.dstBinding		= 0;
+		settings_set_write.dstArrayElement	= 0;
+		settings_set_write.descriptorType	= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		settings_set_write.descriptorCount	= 1;
+		settings_set_write.pBufferInfo		= &settings_buffer_info;
+
+		std::vector<VkWriteDescriptorSet> set_writes = { settings_set_write };
+
+		vkUpdateDescriptorSets(*m_Device, static_cast<uint32_t>(set_writes.size()), set_writes.data(), 0, nullptr);
+	}
+}
+
 VkDescriptorSetLayout& Descriptors::GetViewProjectionSetLayout()
 {
 	return m_ViewProjectionLayout;
@@ -309,6 +374,11 @@ VkDescriptorSetLayout& Descriptors::GetInputSetLayout()
 VkDescriptorSetLayout& Descriptors::GetLightSetLayout()
 {
 	return m_LightLayout;
+}
+
+VkDescriptorSetLayout& Descriptors::GetSettingsSetLayout()
+{
+	return m_SettingsLayout;
 }
 
 VkDescriptorPool& Descriptors::GetVpPool()
@@ -336,6 +406,11 @@ VkDescriptorPool& Descriptors::GetLightPool()
 	return m_LightPool;
 }
 
+VkDescriptorPool& Descriptors::GetSettingsPool()
+{
+	return m_SettingsPool;
+}
+
 std::vector<VkDescriptorSet>& Descriptors::GetDescriptorSets()
 {
 	return m_DescriptorSets;
@@ -349,6 +424,11 @@ std::vector<VkDescriptorSet>& Descriptors::GetInputDescriptorSets()
 std::vector<VkDescriptorSet>& Descriptors::GetLightDescriptorSets()
 {
 	return m_LightDescriptorSets;
+}
+
+std::vector<VkDescriptorSet>& Descriptors::GetSettingsDescriptorSets()
+{
+	return m_SettingsDescriptorSets;
 }
 
 void Descriptors::DestroyTexturePool()
@@ -379,6 +459,11 @@ void Descriptors::DestroyInputAttachmentsLayout()
 void Descriptors::DestroyLightLayout()
 {
 	vkDestroyDescriptorSetLayout(*m_Device, m_LightLayout, nullptr);
+}
+
+void Descriptors::DestroySettingsLayout()
+{
+	vkDestroyDescriptorSetLayout(*m_Device, m_SettingsLayout, nullptr);
 }
 
 void Descriptors::CreateViewProjectionPool(size_t numOfSwapImgs, size_t UBOsize)
@@ -512,6 +597,28 @@ void Descriptors::CreateLightPool(size_t swapchain_images, size_t ubo_size)
 
 }
 
+void Descriptors::CreateSettingsPool(size_t swapchain_images, size_t ubo_size)
+{
+	VkDescriptorPoolSize settings_pool_size = {};
+	settings_pool_size.type				= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	settings_pool_size.descriptorCount	= static_cast<uint32_t> (ubo_size);
+
+	std::vector<VkDescriptorPoolSize> pool_sizes = { settings_pool_size };
+
+	VkDescriptorPoolCreateInfo pool_info = {};
+	pool_info.sType			= VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	pool_info.maxSets		= static_cast<uint32_t>(swapchain_images);
+	pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
+	pool_info.pPoolSizes	= pool_sizes.data();
+
+	VkResult result = vkCreateDescriptorPool(*m_Device, &pool_info, nullptr, &m_SettingsPool);
+
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create the Settings Descriptor Pool!");
+	}
+}
+
 void Descriptors::DestroyImguiPool()
 {
 	vkDestroyDescriptorPool(*m_Device, m_ImguiDescriptorPool, nullptr);
@@ -525,4 +632,9 @@ void Descriptors::DestroyInputPool()
 void Descriptors::DestroyLightPool()
 {
 	vkDestroyDescriptorPool(*m_Device, m_LightPool, nullptr);
+}
+
+void Descriptors::DestroySettingsPool()
+{
+	vkDestroyDescriptorPool(*m_Device, m_SettingsPool, nullptr);
 }

@@ -11,8 +11,8 @@ VulkanRenderer::VulkanRenderer()
 	m_PresentationQueue					= 0;
 	m_MainDevice.LogicalDevice			= 0;
 	m_MainDevice.PhysicalDevice			= 0;
-	m_ViewProjectionData.projection		= glm::mat4(1.f);
-	m_ViewProjectionData.view			= glm::mat4(1.f);
+	m_VPData.proj		= glm::mat4(1.f);
+	m_VPData.view			= glm::mat4(1.f);
 	m_MainDevice.MinUniformBufferOffset	= 0;
 	
 	m_RenderPassHandler			= RenderPassHandler(&m_MainDevice, &m_SwapChain);
@@ -49,8 +49,9 @@ int VulkanRenderer::Init(Window* window)
 		VkDescriptorSetLayout tex_set_layout	= m_Descriptors.GetTextureSetLayout();
 		VkDescriptorSetLayout inp_set_layout	= m_Descriptors.GetInputSetLayout();
 		VkDescriptorSetLayout light_set_layout	= m_Descriptors.GetLightSetLayout();
+		VkDescriptorSetLayout settings_set_layout	= m_Descriptors.GetSettingsSetLayout();
 
-		m_GraphicPipeline.SetDescriptorSetLayouts(vp_set_layout, tex_set_layout, inp_set_layout, light_set_layout);
+		m_GraphicPipeline.SetDescriptorSetLayouts(vp_set_layout, tex_set_layout, inp_set_layout, light_set_layout, settings_set_layout);
 
 		SetupPushCostantRange();
 		m_GraphicPipeline.SetPushCostantRange(m_PushCostantRange);
@@ -83,11 +84,12 @@ int VulkanRenderer::Init(Window* window)
 
 		CreateUniformBuffers();
 
-		m_Descriptors.CreateDescriptorPools(m_SwapChain.SwapChainImagesSize(), m_ViewProjectionUBO.size(), m_LightUBO.size());
+		m_Descriptors.CreateDescriptorPools(m_SwapChain.SwapChainImagesSize(), m_ViewProjectionUBO.size(), m_LightUBO.size(), m_SettingsUBO.size());
 
 		m_Descriptors.CreateViewProjectionDescriptorSets(m_ViewProjectionUBO, sizeof(ViewProjectionData), m_SwapChain.SwapChainImagesSize());
 		m_Descriptors.CreateInputAttachmentsDescriptorSets(m_SwapChain.SwapChainImagesSize(), m_PositionBufferImages, m_ColorBufferImages, m_NormalBufferImages);
 		m_Descriptors.CreateLightDescriptorSets(m_LightUBO, sizeof(LightData), m_SwapChain.SwapChainImagesSize());
+		m_Descriptors.CreateSettingsDescriptorSets(m_SettingsUBO, sizeof(SettingsData), m_SwapChain.SwapChainImagesSize());
 
 		CreateSynchronizationObjects();
 		SetUniformDataStructures();
@@ -99,6 +101,7 @@ int VulkanRenderer::Init(Window* window)
 		CreateMeshModel("Models/Vivi_Final.obj");
 		CreateMeshModel("Models/Vivi_Final.obj");
 		CreateMeshModel("Models/Vivi_Final.obj");
+		CreateMeshModel("Models/FloorTiledMarble.fbx");
 	}
 	catch (std::runtime_error& e)
 	{
@@ -140,15 +143,25 @@ void VulkanRenderer::CreateOffScreenFrameBuffer() {
 
 void VulkanRenderer::UpdateModel(int modelID, glm::mat4 newModel)
 {
-	if (modelID >= m_MeshList.size())
+	//if (modelID >= m_MeshList.size())
+		//return;
+	//m_MeshList[modelID].setModel(newModel);
+
+	if (modelID >= m_MeshModelList.size())
 		return;
 	m_MeshModelList[modelID].SetModel(newModel);
-	//m_MeshList[modelID].setModel(newModel);
 }
 
 void VulkanRenderer::UpdateCameraPosition(const glm::mat4& view_matrix)
 {
-	m_ViewProjectionData.view = view_matrix;
+	m_VPData.view = view_matrix;
+}
+
+void VulkanRenderer::UpdateLightPosition(unsigned int lightID, const glm::vec3& pos)
+{
+	if (lightID >= m_LightData.size())
+		return;
+	m_LightData[lightID].m_LightPosition = pos;
 }
 
 void VulkanRenderer::Draw(ImDrawData *draw_data)
@@ -174,7 +187,8 @@ void VulkanRenderer::Draw(ImDrawData *draw_data)
 		draw_data, image_idx, m_SwapChain.GetExtent(),
 		m_SwapChain.GetFrameBuffers(),
 		m_Descriptors.GetLightDescriptorSets(),
-		m_Descriptors.GetInputDescriptorSets());
+		m_Descriptors.GetInputDescriptorSets(),
+		m_Descriptors.GetSettingsDescriptorSets());
 			
 	UpdateUniformBuffersWithData(image_idx);
 
@@ -613,28 +627,51 @@ void VulkanRenderer::SetupPushCostantRange()
 void VulkanRenderer::SetUniformDataStructures()
 {
 	// View-Projection
-	float const aspectRatio					= static_cast<float>(m_SwapChain.GetExtentWidth()) / static_cast<float>(m_SwapChain.GetExtentHeight());
-	m_ViewProjectionData.projection			= glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.f);
-	m_ViewProjectionData.projection[1][1]	= m_ViewProjectionData.projection[1][1] * -1.0f;
-	m_ViewProjectionData.view				= glm::lookAt(glm::vec3(0.f, 0.f, 3.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.0f, 0.f));
+	float const aspectRatio = static_cast<float>(m_SwapChain.GetExtentWidth()) / static_cast<float>(m_SwapChain.GetExtentHeight());
+	m_VPData.proj = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 100.f);
+	m_VPData.proj[1][1] = m_VPData.proj[1][1] * -1.0f;
+	m_VPData.view = glm::lookAt(glm::vec3(0.f, 0.f, 3.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.0f, 0.f));
 
-	// Lights
-	Light l1 = Light(1.0f, 0.0f, 0.0f, 1.0f);
-	l1.SetLightPosition(glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
-	Light l2 = Light(0.0f, 1.0f, 0.0f, 1.0f);
-	l2.SetLightPosition(glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
-	Light l3 = Light(0.0f, 0.0f, 1.0f, 1.0f);
-	l3.SetLightPosition(glm::vec4(0.0f, 0.0f, -1.0f, 1.0f));
+	// Light
+	pcg_extras::seed_seq_from<std::random_device> seed_source;
+	pcg32 rng(seed_source);
+	std::uniform_real_distribution<float> uniform_dist(0.0f, 1.0f);
+	float rnd_x = 0.0f;
+	float y = -0.5f;
+	float z = 0.0f;
+	float rnd_r = 0.0f;
+	float rnd_g = 0.0f;
+	float rnd_b = 0.0f;
 
-	m_LightData[0] = l1.GetUBOData();
-	m_LightData[1] = l2.GetUBOData();
-	m_LightData[2] = l3.GetUBOData();
+	for (int i = 0; i < NUM_LIGHTS / 2; i += 2)
+	{
+		rnd_r = uniform_dist(rng);
+		rnd_g = uniform_dist(rng);
+		rnd_b = uniform_dist(rng);
+		Light l1 = Light(rnd_r, rnd_g, rnd_b, 1.0f);
+
+		rnd_x = uniform_dist(rng);
+		l1.SetLightPosition(glm::vec4(rnd_r, rnd_g, rnd_b, 1.0f));
+
+		rnd_r = uniform_dist(rng);
+		rnd_g = uniform_dist(rng);
+		rnd_b = uniform_dist(rng);
+		Light l2 = Light(rnd_r, rnd_g, rnd_b, 1.0f);
+
+		rnd_x = uniform_dist(rng);
+		l2.SetLightPosition(glm::vec4(rnd_r, rnd_g, rnd_b, 1.0f));
+
+		m_LightData[i] = l1.GetUBOData();
+		m_LightData[i + 1] = l2.GetUBOData();
+	}
+
+	m_SettingsData.render_target = 3;
 }
 
 void VulkanRenderer::CreateUniformBuffers()
 {
 	BufferSettings buffer_settings;
-	buffer_settings.size		= sizeof(m_ViewProjectionData);
+	buffer_settings.size		= sizeof(m_VPData);
 	buffer_settings.usage		= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 	buffer_settings.properties	= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
@@ -657,7 +694,7 @@ void VulkanRenderer::CreateUniformBuffers()
 			&m_modelDynamicUBO[i], &m_modelDynamicUniformBufferMemory[i]);*/
 	}
 
-	buffer_settings.size = sizeof(LightData);
+	buffer_settings.size = NUM_LIGHTS * sizeof(LightData);
 
 	m_LightUBO.resize(m_SwapChain.SwapChainImagesSize());
 	m_LightUBOMemory.resize(m_SwapChain.SwapChainImagesSize());
@@ -666,6 +703,16 @@ void VulkanRenderer::CreateUniformBuffers()
 	{
 		Utility::CreateBuffer(buffer_settings, &m_LightUBO[i], &m_LightUBOMemory[i]);
 	}
+
+	buffer_settings.size = sizeof(SettingsData);
+	m_SettingsUBO.resize(m_SwapChain.SwapChainImagesSize());
+	m_SettingsUBOMemory.resize(m_SwapChain.SwapChainImagesSize());
+
+	for (size_t i = 0; i < m_SwapChain.SwapChainImagesSize(); ++i)
+	{
+		Utility::CreateBuffer(buffer_settings, &m_SettingsUBO[i], &m_SettingsUBOMemory[i]);
+	}
+
 }
 
 void VulkanRenderer::UpdateUniformBuffersWithData(uint32_t imageIndex)
@@ -673,7 +720,7 @@ void VulkanRenderer::UpdateUniformBuffersWithData(uint32_t imageIndex)
 	void* vp_data;
 	vkMapMemory(m_MainDevice.LogicalDevice, m_ViewProjectionUBOMemory[imageIndex], 0, 
 		sizeof(ViewProjectionData), 0, &vp_data);
-	memcpy(vp_data, &m_ViewProjectionData, sizeof(ViewProjectionData));
+	memcpy(vp_data, &m_VPData, sizeof(ViewProjectionData));
 	vkUnmapMemory(m_MainDevice.LogicalDevice, m_ViewProjectionUBOMemory[imageIndex]);
 
 	void* light_data;
@@ -681,6 +728,13 @@ void VulkanRenderer::UpdateUniformBuffersWithData(uint32_t imageIndex)
 	vkMapMemory(m_MainDevice.LogicalDevice, m_LightUBOMemory[imageIndex], 0, light_data_size, 0, &light_data);
 	memcpy(light_data, m_LightData.data(), light_data_size);
 	vkUnmapMemory(m_MainDevice.LogicalDevice, m_LightUBOMemory[imageIndex]);
+
+	void* settings_data;
+	auto settings_data_size = sizeof(SettingsData);
+	const void* ptr_settings = &m_SettingsData;
+	vkMapMemory(m_MainDevice.LogicalDevice, m_SettingsUBOMemory[imageIndex], 0, settings_data_size, 0, &settings_data);
+	memcpy(settings_data, ptr_settings, settings_data_size);
+	vkUnmapMemory(m_MainDevice.LogicalDevice, m_SettingsUBOMemory[imageIndex]);
 }
 
 void VulkanRenderer::Cleanup()
@@ -700,7 +754,6 @@ void VulkanRenderer::Cleanup()
 	GUI::GetInstance()->Destroy();
 
 	m_Descriptors.DestroyImguiPool();
-
 	m_Descriptors.DestroyTexturePool();
 	m_Descriptors.DestroyTextureLayout();
 
@@ -741,6 +794,17 @@ void VulkanRenderer::Cleanup()
 		vkDestroyBuffer(m_MainDevice.LogicalDevice, m_LightUBO[i], nullptr);
 		vkFreeMemory(m_MainDevice.LogicalDevice, m_LightUBOMemory[i], nullptr);
 	}
+
+	m_Descriptors.DestroySettingsPool();
+	m_Descriptors.DestroySettingsLayout();
+
+	for (size_t i = 0; i < m_SettingsUBO.size(); ++i)
+	{
+		vkDestroyBuffer(m_MainDevice.LogicalDevice, m_SettingsUBO[i], nullptr);
+		vkFreeMemory(m_MainDevice.LogicalDevice, m_SettingsUBOMemory[i], nullptr);
+	}
+
+
 
 	for (size_t i = 0; i < m_MeshList.size(); i++)
 	{
@@ -797,6 +861,11 @@ const VulkanRenderData VulkanRenderer::GetRenderData()
 	data.texture_descriptor_pool	= m_Descriptors.GetTexturePool();
 
 	return data;
+}
+
+SettingsData* VulkanRenderer::GetUBOSettingsRef()
+{
+	return &m_SettingsData;
 }
 
 VulkanRenderer::~VulkanRenderer()

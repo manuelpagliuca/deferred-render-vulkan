@@ -85,8 +85,12 @@ struct TextureObjects {
 };
 
 struct ViewProjectionData {
-	glm::mat4 projection;
+	glm::mat4 proj;
 	glm::mat4 view;
+};
+
+struct SettingsData {
+	int render_target;
 };
 
 struct BufferImage {

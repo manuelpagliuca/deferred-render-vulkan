@@ -7,9 +7,7 @@ void GUI::Init()
 {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+	ImGuiIO& io = ImGui::GetIO();
 
 	ImGui::StyleColorsDark();
 
@@ -59,15 +57,63 @@ void GUI::Render()
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
+	ImGuiWindowFlags window_flags{ ImGuiWindowFlags_NoResize };
+	ImGui::SetNextWindowSize(ImVec2(350.f, 180.f), 0);
+	ImGui::SetNextWindowPos(ImVec2(50.f, 50.f), ImGuiCond_FirstUseEver);
+	
+	ImGui::Begin("Settings", NULL, window_flags);
+	ImGui::Combo("Render Target", &m_SettingsData->render_target, "Position\0Normals\0Albedo\0Deferred Rendering\0");
 
-	ImGui::ShowDemoWindow();
+	switch (m_SettingsData->render_target)
+	{
+	case 0:
+		m_SettingsData->render_target = 0;
+		break;
+	case 1:
+		m_SettingsData->render_target = 1;
+		break;
+	case 2:
+		m_SettingsData->render_target = 2;
+		break;
+	case 3:
+		m_SettingsData->render_target = 3;
+		break;
+	}
 
+	ImGui::TextColored(ImVec4(1.f, 0.f, 0.f, 1.f), "The lights are enabled only \nwhen using deferred rendering");
+
+	ImGui::SliderFloat("Lights Movement Speed", m_LightsSpeed, 0.0001f, 0.001f);
+
+	ImGui::End();
 	ImGui::Render();
 }
 
 ImDrawData* GUI::GetDrawData()
 {
 	return ImGui::GetDrawData();
+}
+
+void GUI::KeysControl(bool* keys)
+{
+	if (keys[GLFW_KEY_1])
+	{
+		m_SettingsData->render_target = 0;
+	}
+
+	if (keys[GLFW_KEY_2])
+	{
+		m_SettingsData->render_target = 1;
+	}
+
+	if (keys[GLFW_KEY_3])
+	{
+		m_SettingsData->render_target = 2;
+	}
+
+	if (keys[GLFW_KEY_4])
+	{
+		m_SettingsData->render_target = 3;
+	}
 }
 
 void GUI::Destroy()

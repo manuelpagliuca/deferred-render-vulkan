@@ -55,7 +55,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;ENABLED_VALIDATION_LAYERS;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Vendor\GLFW\include;C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)Vendor\GLM\;$(SolutionDir)Vendor\STB_IMAGE;$(SolutionDir)Vendor\ASSIMP\include;$(SolutionDir)VulkanEngine\tiny_obj_loader.h</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Vendor\GLFW\include;C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)Vendor\GLM\;$(SolutionDir)Vendor\STB_IMAGE;$(SolutionDir)Vendor\ASSIMP\include;$(SolutionDir)Vendor\PCG</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -76,7 +76,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)Vendor\GLFW\include;C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)Vendor\GLM\;$(SolutionDir)Vendor\STB_IMAGE;$(SolutionDir)Vendor\ASSIMP\include;$(SolutionDir)VulkanEngine\tiny_obj_loader.h</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Vendor\GLFW\include;C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)Vendor\GLM\;$(SolutionDir)Vendor\STB_IMAGE;$(SolutionDir)Vendor\ASSIMP\include;$(SolutionDir)Vendor\PCG</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>ENABLED_VALIDATION_LAYERS;</UndefinePreprocessorDefinitions>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>

@@ -221,10 +221,11 @@ void GraphicPipeline::CreateGraphicPipeline()
 
 	depth_stencil_info.depthWriteEnable						= VK_FALSE;
 
-	std::array<VkDescriptorSetLayout, 2> snd_pipeline_desc_set_layouts =
+	std::array<VkDescriptorSetLayout, 3> snd_pipeline_desc_set_layouts =
 	{
 		m_InputSetLayout,
-		m_LightSetLayout
+		m_LightSetLayout,
+		m_SettingsSetLayout
 	};
 
 	// Create new pipeline layout
@@ -272,15 +273,19 @@ void GraphicPipeline::SetDescriptorSetLayouts(
 	VkDescriptorSetLayout& descriptorSetLayout, 
 	VkDescriptorSetLayout& textureObjects, 
 	VkDescriptorSetLayout& inputSetLayout,
-	VkDescriptorSetLayout& light_set_layout)
+	VkDescriptorSetLayout& light_set_layout,
+	VkDescriptorSetLayout& settings_set_layout)
 {
 	m_ViewProjectionSetLayout	= descriptorSetLayout;
 	m_TextureSetLayout			= textureObjects;
 	m_InputSetLayout			= inputSetLayout;
 	m_LightSetLayout			= light_set_layout;
+	m_SettingsSetLayout			= settings_set_layout;
+
 	m_FirstPipeline				= 0;
-	m_SecondPipeline			= 0;
 	m_FirstPipelineLayout		= 0;
+
+	m_SecondPipeline			= 0;
 	m_SecondPipelineLayout		= 0;
 }
 

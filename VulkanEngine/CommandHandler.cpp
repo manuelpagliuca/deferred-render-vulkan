@@ -126,7 +126,8 @@ void CommandHandler::RecordCommands(
 	ImDrawData* draw_data, uint32_t current_img, VkExtent2D& imageExtent,
 	std::vector<VkFramebuffer>& frameBuffers,
 	std::vector<VkDescriptorSet>& light_desc_sets,
-	std::vector<VkDescriptorSet>& inputDescriptorSet)
+	std::vector<VkDescriptorSet>& inputDescriptorSet,
+	std::vector<VkDescriptorSet>& settings_desc_set)
 {
 	VkCommandBufferBeginInfo buffer_begin_info = {};
 	buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -156,10 +157,11 @@ void CommandHandler::RecordCommands(
 	vkCmdBindPipeline(m_CommandBuffers[current_img], VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicPipeline->GetSecondPipeline());
 
 	{
-		std::array<VkDescriptorSet, 2> desc_set_group =
+		std::array<VkDescriptorSet, 3> desc_set_group =
 		{
 			inputDescriptorSet[current_img],
-			light_desc_sets[current_img]
+			light_desc_sets[current_img],
+			settings_desc_set[current_img]
 		};
 
 		vkCmdBindDescriptorSets(

@@ -26,7 +26,8 @@ public:
 	void RecordCommands(ImDrawData* draw_data, uint32_t current_img, VkExtent2D& imageExtent,
 		std::vector<VkFramebuffer>& frameBuffers,
 		std::vector<VkDescriptorSet>& light_desc_sets,
-		std::vector<VkDescriptorSet>& inputDescriptorSet);
+		std::vector<VkDescriptorSet>& inputDescriptorSet,
+		std::vector<VkDescriptorSet>& settings_desc_set);
 
 	void DestroyCommandPool();
 	void FreeCommandBuffers();

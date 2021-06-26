@@ -22,7 +22,7 @@ public:
 
 	void SetDescriptorSetLayouts(
 		VkDescriptorSetLayout& descriptorSetLayout, VkDescriptorSetLayout& textureObjects,
-		VkDescriptorSetLayout& inputSetLayout, VkDescriptorSetLayout& light_set_layout);
+		VkDescriptorSetLayout& inputSetLayout, VkDescriptorSetLayout& light_set_layout, VkDescriptorSetLayout& settings_set_layout);
 	void SetPushCostantRange(VkPushConstantRange& pushCostantRange);
 	void SetVertexStageBindingDescription();
 	void SetVertexttributeDescriptions();
@@ -51,6 +51,8 @@ private:
 	VkDescriptorSetLayout	m_TextureSetLayout;
 	VkDescriptorSetLayout	m_InputSetLayout;
 	VkDescriptorSetLayout	m_LightSetLayout;
+	VkDescriptorSetLayout	m_SettingsSetLayout;
+
 	VkPushConstantRange		m_PushCostantRange;
 
 private:
