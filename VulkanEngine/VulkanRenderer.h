@@ -21,7 +21,7 @@
 #include "MeshModel.h"
 #include "Light.h"
 
-constexpr std::size_t NUM_LIGHTS = 10;
+constexpr std::size_t NUM_LIGHTS = 20;
 
 class VulkanRenderer
 {
@@ -33,6 +33,7 @@ public:
 	void UpdateModel(int modelID, glm::mat4 newModel);
 	void UpdateCameraPosition(const glm::mat4& view_matrix);
 	void UpdateLightPosition(unsigned int lightID, const glm::vec3 &pos);
+	void UpdateLightColour(unsigned int lightID, const glm::vec3 &col);
 	void Draw(ImDrawData * draw_data);
 	void Cleanup();
 
@@ -84,8 +85,6 @@ private:
 	std::vector<VkDeviceMemory>	 m_SettingsUBOMemory;
 	SettingsData				 m_SettingsData;
 
-	//std::vector<VkBuffer>		 m_modelDynamicUBO;						
-	//std::vector<VkDeviceMemory>  m_modelDynamicUniformBufferMemory;		
 	VkPushConstantRange			 m_PushCostantRange;
 
 	std::vector<SubmissionSyncObjects> m_SyncObjects;

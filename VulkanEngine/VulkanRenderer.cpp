@@ -164,6 +164,13 @@ void VulkanRenderer::UpdateLightPosition(unsigned int lightID, const glm::vec3& 
 	m_LightData[lightID].m_LightPosition = pos;
 }
 
+void VulkanRenderer::UpdateLightColour(unsigned int lightID, const glm::vec3& col)
+{
+	if (lightID >= m_LightData.size())
+		return;
+	m_LightData[lightID].m_Colour = col;
+}
+
 void VulkanRenderer::Draw(ImDrawData *draw_data)
 {
 	vkWaitForFences(m_MainDevice.LogicalDevice, 1, &m_SyncObjects[m_CurrentFrame].InFlight, VK_TRUE, std::numeric_limits<uint64_t>::max());

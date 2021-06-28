@@ -2,7 +2,7 @@
 
 #extension GL_KHR_vulkan_glsl: enable
 
-#define NUM_LIGHTS 3
+#define NUM_LIGHTS 20
 
 struct UboLight {
 	vec3 	color;

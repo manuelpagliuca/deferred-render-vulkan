@@ -58,7 +58,7 @@ void GUI::Render()
 	ImGui::NewFrame();
 
 	ImGuiWindowFlags window_flags{ ImGuiWindowFlags_NoResize };
-	ImGui::SetNextWindowSize(ImVec2(350.f, 180.f), 0);
+	ImGui::SetNextWindowSize(ImVec2(350.f, 480.f), 0);
 	ImGui::SetNextWindowPos(ImVec2(50.f, 50.f), ImGuiCond_FirstUseEver);
 	
 	ImGui::Begin("Settings", NULL, window_flags);
@@ -82,7 +82,19 @@ void GUI::Render()
 
 	ImGui::TextColored(ImVec4(1.f, 0.f, 0.f, 1.f), "The lights are enabled only \nwhen using deferred rendering");
 
-	ImGui::SliderFloat("Lights Movement Speed", m_LightsSpeed, 0.0001f, 0.001f);
+	ImGui::SliderFloat("Lights Movement Speed", m_LightsSpeed, 0.0f, 10.0f);
+	
+
+	ImGui::Combo("Select Light", m_LightIdx, 
+		"1\0""2\0""3\0""4\0""5\0"
+		"6\0""7\0""8\0""9\0""10\0"
+		"11\0""12\0""13\0""14\0""15\0"
+		"16\0""17\0""18\0""19\0""20\0");
+
+	ImGui::ColorPicker3("Lights colour", m_Col);
+	m_LightCol->r = m_Col[0];
+	m_LightCol->g = m_Col[1];
+	m_LightCol->b = m_Col[2];
 
 	ImGui::End();
 	ImGui::Render();
