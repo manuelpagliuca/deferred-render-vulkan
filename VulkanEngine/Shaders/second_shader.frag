@@ -54,7 +54,7 @@ void main()
 
 		vec3 R 			= reflect(-L, N);
 		float dotRV 	= max(0.0, dot(R, View));
-		vec3 specular 	= ubo_lights.l[i].color * fragColour * pow(dotRV, 16.0) ; // * attenuation
+		vec3 specular 	= ubo_lights.l[i].color * fragColour * pow(dotRV, 16.0) ;		// * attenuation
 
 		colour.rgb 	   += diffuse + specular;
 	}

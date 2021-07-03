@@ -35,15 +35,20 @@ int VulkanRenderer::Init(Window* window)
 
 	try
 	{
+		// Setting up global pointers 
 		Utility::Setup(&m_MainDevice, &m_Surface, &m_CommandHandler.GetCommandPool(), &m_GraphicsQueue);
 
+		// Instance + Surface + Physical Device + Logical Device
 		CreateKernel();
 
+		// Swapchain creation
 		m_SwapChain.CreateSwapChain();
 
+		// Creation of renderpasses
 		m_RenderPassHandler.CreateOffScreenRenderPass();
 		m_RenderPassHandler.CreateRenderPass();
 			
+		// Creation of set layouts
 		m_Descriptors.CreateSetLayouts();
 		VkDescriptorSetLayout vp_set_layout		= m_Descriptors.GetViewProjectionSetLayout();
 		VkDescriptorSetLayout tex_set_layout	= m_Descriptors.GetTextureSetLayout();
@@ -51,13 +56,17 @@ int VulkanRenderer::Init(Window* window)
 		VkDescriptorSetLayout light_set_layout	= m_Descriptors.GetLightSetLayout();
 		VkDescriptorSetLayout settings_set_layout	= m_Descriptors.GetSettingsSetLayout();
 
+		// Setting descriptor layouts on the pipeline
 		m_GraphicPipeline.SetDescriptorSetLayouts(vp_set_layout, tex_set_layout, inp_set_layout, light_set_layout, settings_set_layout);
 
+		// Setting up PushCostant on the pipeline
 		SetupPushCostantRange();
 		m_GraphicPipeline.SetPushCostantRange(m_PushCostantRange);
 
+		// Creating the first pipeline
 		m_GraphicPipeline.CreateGraphicPipeline();
 
+		// Creation of the offscreen buffer images
 		m_PositionBufferImages.resize(m_SwapChain.SwapChainImagesSize());
 		m_ColorBufferImages.resize(m_SwapChain.SwapChainImagesSize());
 		m_NormalBufferImages.resize(m_SwapChain.SwapChainImagesSize());
@@ -71,33 +80,52 @@ int VulkanRenderer::Init(Window* window)
 
 		Utility::CreateDepthBufferImage(m_DepthBufferImage, m_SwapChain.GetExtent());
 
+		// Setting the first renderpass
 		m_SwapChain.SetRenderPass(m_RenderPassHandler.GetRenderPassReference());
+
+		// Creation of the framebuffers
 		m_SwapChain.CreateFrameBuffers(m_DepthBufferImage.ImageView, m_ColorBufferImages);
 
+		// Creation of the offscreen framebuffers
 		CreateOffScreenFrameBuffer();
 
+		// Creation of Command Pool + Command Buffers for the first pipeline
 		m_CommandHandler.CreateCommandPool(m_QueueFamilyIndices);
 		m_CommandHandler.CreateCommandBuffers(m_SwapChain.FrameBuffersSize());
+
+		// Creation of Command Pool + Command Buffers for the second pipeline
 		m_OffScreenCommandHandler.CreateCommandPool(m_QueueFamilyIndices);
 		m_OffScreenCommandHandler.CreateCommandBuffers(m_SwapChain.FrameBuffersSize());
+
+		// Sampler
 		m_TextureObjects.CreateSampler(m_MainDevice);
 
+		// Creation of the UBO for Lights, VP and Settings
 		CreateUniformBuffers();
 
+		// Creation of Descriptor Pools
 		m_Descriptors.CreateDescriptorPools(m_SwapChain.SwapChainImagesSize(), m_ViewProjectionUBO.size(), m_LightUBO.size(), m_SettingsUBO.size());
 
+		// Creation of Descriptor Sets
 		m_Descriptors.CreateViewProjectionDescriptorSets(m_ViewProjectionUBO, sizeof(ViewProjectionData), m_SwapChain.SwapChainImagesSize());
 		m_Descriptors.CreateInputAttachmentsDescriptorSets(m_SwapChain.SwapChainImagesSize(), m_PositionBufferImages, m_ColorBufferImages, m_NormalBufferImages);
 		m_Descriptors.CreateLightDescriptorSets(m_LightUBO, sizeof(LightData), m_SwapChain.SwapChainImagesSize());
 		m_Descriptors.CreateSettingsDescriptorSets(m_SettingsUBO, sizeof(SettingsData), m_SwapChain.SwapChainImagesSize());
 
+		// Creation of Syn Objects
 		CreateSynchronizationObjects();
+
+		// Setting up data for the Data Structures (View-Projection, Lights, Settings)
 		SetUniformDataStructures();
 
+		// Init the Textures
 		TextureLoader::GetInstance()->Init(GetRenderData(), &m_TextureObjects);
+
+		// Loading the scene
 		m_Scene.PassRenderData(GetRenderData());
 		m_Scene.LoadScene(m_MeshList, m_TextureObjects);
 
+		// Create the models
 		CreateMeshModel("Models/Vivi_Final.obj");
 		CreateMeshModel("Models/Vivi_Final.obj");
 		CreateMeshModel("Models/Vivi_Final.obj");

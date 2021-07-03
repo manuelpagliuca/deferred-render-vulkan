@@ -26,7 +26,9 @@ layout(location = 2) out vec3 fragNrm;
 layout(location = 3) out vec2 fragTex;
 
 void main() {
-	gl_Position = uboViewProjection.projection * uboViewProjection.view * pushModel.model * vec4(pos, 1.0);
+	gl_Position = uboViewProjection.projection *
+				  uboViewProjection.view * 
+				  pushModel.model * vec4(pos, 1.0);
 	fragCol 	= col;
 	fragTex 	= tex;
 
@@ -36,3 +38,4 @@ void main() {
 	mat3 nrmModel 	= transpose(inverse(mat3(pushModel.model)));
 	fragNrm 		= nrmModel * normalize(nrm);
 }
+

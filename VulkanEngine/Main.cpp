@@ -7,6 +7,19 @@
 
 static VulkanRenderer* vulkanRenderer = new VulkanRenderer();
 
+// Help function
+void printFPS(int *frame_count, const double now, double *prev_time)
+{
+	(*frame_count)++;
+
+	if (now - *prev_time >= 1.0)
+	{
+		std::cout << *frame_count << std::endl;
+		*frame_count = 0;
+		*prev_time = now;
+	}
+}
+
 int main(void)
 {
 	Window window(1280, 720, "Vulkan | Deferred Render");
@@ -16,18 +29,15 @@ int main(void)
 		return EXIT_FAILURE;
 	}
 
-	glm::vec3 cam_pos = glm::vec3(0.0f, 0.0f, 3.0f);	// Vector in world space that points to camera position
-	glm::vec3 world_up = glm::vec3(0.0f, 1.0f, 0.0f);	// Vector in world space, parallel to the y axis
-	Camera camera = Camera(cam_pos, world_up, -60.0f, 0.0f, 5.0f, 0.5f);
+	// Setting up camera and world positions
+	glm::vec3 cam_pos   = glm::vec3(0.0f, 0.0f, 3.0f);	// Vector in world space that points to camera position
+	glm::vec3 world_up  = glm::vec3(0.0f, 1.0f, 0.0f);	// Vector in world space, parallel to the y axis
+	Camera camera		= Camera(cam_pos, world_up, -60.0f, 0.0f, 5.0f, 0.5f);
 
 	if (vulkanRenderer->Init(&window) == EXIT_FAILURE)
 		return EXIT_FAILURE;
-
-	float angle		= 0.0f;
-	float delta_time = 0.0f;
-	float last_time  = 0.0f;
-	
-	// Lights Positions
+		
+	// Random Positions for lights
 	pcg_extras::seed_seq_from<std::random_device> seed_source;
 	pcg32 rng(seed_source);
 	std::uniform_real_distribution<float> uniform_dist(-1.0f, 1.0f);
@@ -38,7 +48,6 @@ int main(void)
 
 	float lights_pos	= 0.0f;
 	float lights_speed	= 0.0001f;
-
 
 	// Light Colours
 	glm::vec3 light_col(1.0f);
@@ -51,13 +60,13 @@ int main(void)
 	GUI::GetInstance()->Init();
 	GUI::GetInstance()->LoadFontsToGPU();
 
-	// Floor
+	// Floor model
 	glm::mat4 model(1.0f);
 	model = glm::translate(model, glm::vec3(-4.5f, -0.5f, 2.5f));
 	model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 	vulkanRenderer->UpdateModel(3, model);
 
-	// Vivi
+	// Vivi models
 	glm::mat4 fst_model(1.0f);
 	glm::mat4 snd_model(1.0f);
 	glm::mat4 thd_model(1.0f);
@@ -75,6 +84,12 @@ int main(void)
 	vulkanRenderer->UpdateModel(1, snd_model);
 	vulkanRenderer->UpdateModel(2, thd_model);
 
+	// Timing for fps
+	double previous_time = glfwGetTime();
+	int frame_count  = 0;
+	float delta_time = 0.0f;
+	float last_time  = 0.0f;
+
 	while (!glfwWindowShouldClose(window.getWindow()))
 	{
 		/* Events */
@@ -84,13 +99,13 @@ int main(void)
 		float const now = static_cast<float const>(glfwGetTime());
 		delta_time		= now - last_time;
 		last_time		= now;
+		printFPS(&frame_count, now, &previous_time);
 
 		/* Camera */
 		camera.keyControl(window.getsKeys(), delta_time);
 		vulkanRenderer->UpdateCameraPosition(camera.calculateViewMatrix());
 
 		/* Lights Movement */
-
 		vulkanRenderer->UpdateLightPosition(0, glm::vec3(sinf(start0 + lights_pos), sinf(start1 + lights_pos), sinf(start2 + lights_pos)));
 		vulkanRenderer->UpdateLightPosition(1, glm::vec3(cosf(start1 + lights_pos), cosf(start2 + lights_pos), cosf(start0 + lights_pos)));
 		vulkanRenderer->UpdateLightPosition(2, glm::vec3(sinf(start2 + lights_pos), sinf(start0 + lights_pos), sinf(start1 + lights_pos)));
