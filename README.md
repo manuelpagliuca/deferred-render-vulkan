@@ -1,5 +1,4 @@
-# Deferred Renderer in Vulkan
-
+# Deferred Renderer (Vulkan)
 [![GitHub license](https://img.shields.io/badge/license-MIT-brightgreen)](https://github.com/manuelpagliuca/Affine/blob/main/LICENSE)
 ![build-status](https://img.shields.io/badge/build-working-green)
 ![uni](https://img.shields.io/badge/university-project-blue)
