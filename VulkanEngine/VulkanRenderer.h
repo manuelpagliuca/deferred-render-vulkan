@@ -71,7 +71,7 @@ private:
 	std::vector<BufferImage> m_NormalBufferImages;
 	BufferImage m_DepthBufferImage;
 
-	std::vector<VkFramebuffer>			m_OffScreenFrameBuffer;
+	std::vector<VkFramebuffer>	 m_OffScreenFrameBuffer;
 	
 	std::vector<VkBuffer>		 m_ViewProjectionUBO;
 	std::vector<VkDeviceMemory>  m_ViewProjectionUBOMemory;

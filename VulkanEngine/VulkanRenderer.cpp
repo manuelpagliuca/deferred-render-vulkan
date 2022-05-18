@@ -45,8 +45,8 @@ int VulkanRenderer::Init(Window* window)
 		m_SwapChain.CreateSwapChain();
 
 		// Creation of renderpasses
-		m_RenderPassHandler.CreateOffScreenRenderPass();
 		m_RenderPassHandler.CreateRenderPass();
+		m_RenderPassHandler.CreateOffScreenRenderPass();
 			
 		// Creation of set layouts
 		m_Descriptors.CreateSetLayouts();
