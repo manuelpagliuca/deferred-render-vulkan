@@ -11,6 +11,6 @@ I decided to develop a [*deferred renderer*](https://en.wikipedia.org/wiki/Defer
 
 If you want to look at the working application without downloading the repository, just check the youtube [video](https://youtu.be/V7PxEpzkY1c).
 
-For more information about the development process and metrics, it is possible to read the paper [here](https://github.com/manuelpagliuca/deferred-render/files/9254304/DEFERRED_RENDERING___RTGP.pdf). You can also check the project from my website at [this](https://www.manuelpagliuca.com/project/render/) link.
+For more information about the development process and metrics, it is possible to read the paper [here](https://github.com/manuelpagliuca/deferred-render/files/9254304/DEFERRED_RENDERING___RTGP.pdf). You can also check the project from my website at [this](https://www.manuelpagliuca.xyz/project/render/) link.
 
-For further information about this and other projects just check the [projects section](https://www.manuelpagliuca.com/#projects) of my website.
+For further information about this and other projects just check the [projects section](https://www.manuelpagliuca.xyz/#projects) of my website.
